@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Corrida de Cavalos Corporativa</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#fff; --surface:#f5f4ef; --border:#e3e1d8; --tp:#2c2c2a; --ts:#6b6a64; --tt:#a3a299; --go:#1D9E75; --go-dark:#0F6E56; --danger:#E24B4A; --fire:#D85A30; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--tp); padding:24px 16px; min-height:100vh; }
+  #app { max-width:820px; margin:0 auto; }
+  .screen { display:none; } .screen.active { display:block; }
+  h2 { font-size:20px; font-weight:600; margin-bottom:4px; }
+  .sub { font-size:14px; color:var(--ts); margin-bottom:14px; }
+  .hint { font-size:12px; color:var(--tt); }
+
+  input[type=text], select { height:42px; padding:0 14px; font-size:15px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--tp); outline:none; font-family:inherit; }
+  input[type=text] { flex:1; } select { font-size:14px; }
+  input[type=text]:focus, select:focus { border-color:var(--go); box-shadow:0 0 0 3px rgba(29,158,117,.12); }
+  textarea { width:100%; min-height:110px; padding:12px 14px; font-size:14px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--tp); outline:none; font-family:inherit; resize:vertical; line-height:1.6; }
+  textarea:focus { border-color:var(--go); box-shadow:0 0 0 3px rgba(29,158,117,.12); }
+  label.fld { display:block; font-size:13px; color:var(--ts); margin:14px 0 6px; }
+
+  .btn { height:42px; padding:0 20px; border-radius:10px; font-size:14px; font-weight:500; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--tp); font-family:inherit; transition:background .15s,border-color .15s; display:inline-flex; align-items:center; gap:6px; }
+  .btn:hover { background:var(--surface); } .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-sm { height:36px; padding:0 14px; font-size:13px; }
+  .btn-go { background:var(--go); color:#fff; border-color:var(--go); }
+  .btn-go:hover:not(:disabled){ background:var(--go-dark); border-color:var(--go-dark); }
+  #muteBtn { position:fixed; top:12px; right:12px; z-index:60; background:var(--bg); }
+
+  .modesel { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .mode-btn { height:40px; padding:0 16px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--tp); font-size:13px; font-weight:500; cursor:pointer; }
+  .mode-btn.active { border-color:var(--go); background:#eaf6f1; color:var(--go-dark); }
+  .modehint { font-size:12px; color:var(--tt); margin-bottom:14px; }
+
+  .input-row { display:flex; gap:8px; margin-bottom:10px; }
+  .tools { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .panel { display:none; margin-bottom:14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+  .panel.open { display:block; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; }
+  .chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:14px; }
+  .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip .x { cursor:pointer; color:var(--tt); font-size:20px; line-height:1; border:none; background:none; padding:0 2px; } .chip .x:hover { color:var(--danger); }
+  .teamtag { font-size:9px; color:#fff; border-radius:4px; padding:1px 6px; }
+  #lista { min-height:50px; margin:16px 0; }
+  .empty { font-size:13px; color:var(--tt); grid-column:1/-1; padding:8px 0; }
+
+  details { margin-bottom:14px; } summary { font-size:13px; color:var(--ts); cursor:pointer; }
+  .bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:6px; }
+  .msg { font-size:13px; min-height:18px; } .count { font-size:13px; color:var(--ts); }
+
+  /* CORRIDA */
+  .race-head { margin-bottom:12px; }
+  .racelabel { font-size:13px; color:var(--fire); font-weight:600; margin-bottom:2px; min-height:16px; }
+  .race-head h2 { transition:color .3s; } .race-head h2.fire { color:var(--fire); }
+  .raceprize { font-size:13px; color:var(--go-dark); margin-top:2px; }
+  .narr { font-size:15px; color:var(--ts); font-style:italic; min-height:22px; transition:opacity .25s,color .3s; margin-top:4px; }
+  .narr.fire { color:var(--fire); font-weight:600; font-style:normal; }
+  .scene { height:46px; border-radius:14px 14px 0 0; background:linear-gradient(#bfe3f2,#e6f3f8); position:relative; overflow:hidden; border:1px solid var(--border); border-bottom:none; }
+  .stands { position:absolute; left:0; right:0; bottom:0; height:20px; background:repeating-linear-gradient(90deg,#c8b89a 0,#c8b89a 7px,#b8a888 7px,#b8a888 14px); border-top:2px solid #9a8a6c; }
+  .scene .sun { position:absolute; top:6px; right:24px; width:22px; height:22px; border-radius:50%; background:#ffdf7a; }
+  .pista { background:#e8dcc6; border:1px solid var(--border); border-radius:0 0 14px 14px; overflow:hidden; padding:6px 0; }
+  .pista.reta { background:#ecd9bd; }
+  .raia { position:relative; display:flex; align-items:center; border-bottom:1px dashed rgba(0,0,0,.08); transition:background .4s; }
+  .raia:last-child { border-bottom:none; }
+  .raia-n { width:26px; text-align:center; font-size:10px; color:#7c6f57; flex-shrink:0; }
+  .track { flex:1; position:relative; height:100%; margin-right:8px; background-image:linear-gradient(90deg,transparent 24.7%,rgba(0,0,0,.06) 25%,transparent 25.3%,transparent 49.7%,rgba(0,0,0,.06) 50%,transparent 50.3%,transparent 74.7%,rgba(0,0,0,.06) 75%,transparent 75.3%); }
+  .mud { position:absolute; top:8%; bottom:8%; width:18px; background:rgba(90,60,30,.28); border-radius:4px; }
+  .finish { position:absolute; right:0; top:3px; bottom:3px; width:5px; background:repeating-linear-gradient(45deg,#2c2c2a 0,#2c2c2a 4px,#fff 4px,#fff 8px); border-radius:2px; }
+  .cav { position:absolute; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:4px; will-change:left; white-space:nowrap; }
+  .cav .h { line-height:1; display:inline-block; animation:gallop .5s ease-in-out infinite; transform-origin:center; }
+  .pista.reta .cav .h { animation-duration:.28s; }
+  @keyframes gallop { 0%,100%{transform:scaleX(-1) translateY(0);} 50%{transform:scaleX(-1) translateY(-3px) rotate(-3deg);} }
+  .pista.reta .cav::after { content:""; position:absolute; right:100%; top:50%; width:22px; height:2px; background:linear-gradient(90deg,transparent,rgba(0,0,0,.18)); margin-right:2px; }
+  .cav .dot { border-radius:50%; flex-shrink:0; }
+  .cav .label { font-weight:600; }
+  .cav .tt2 { font-size:9px; color:#fff; border-radius:4px; padding:0 4px; }
+  .badge { border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:600; color:#fff; background:#999; flex-shrink:0; }
+
+  #cd { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; pointer-events:none; }
+  #cd-num { font-size:130px; font-weight:700; line-height:1; text-shadow:0 3px 24px rgba(0,0,0,.18); }
+  @keyframes pop { 0%{transform:scale(.3);opacity:0;} 40%{transform:scale(1.18);opacity:1;} 100%{transform:scale(1);opacity:1;} }
+  #flash { display:none; position:fixed; inset:0; z-index:55; background:rgba(245,244,239,.92); align-items:center; justify-content:center; flex-direction:column; gap:10px; }
+  #flash .pf { font-size:48px; font-weight:700; color:var(--fire); animation:pop .5s ease; } #flash .pf2 { font-size:16px; color:var(--ts); }
+
+  /* HEAT (torneio) */
+  #screen-heat { text-align:center; }
+  #heatTitle { font-size:19px; font-weight:600; margin-bottom:14px; }
+  .bracket { text-align:left; max-width:560px; margin:14px auto; }
+  .bk-round { margin-bottom:14px; } .bk-round .rh { font-size:13px; font-weight:600; color:var(--fire); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .bk-heat { font-size:13px; color:var(--ts); padding:6px 11px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:5px; } .bk-heat .win { color:var(--go-dark); font-weight:600; } .bk-heat em { color:var(--tt); }
+
+  /* RESULTADO */
+  #res { text-align:center; }
+  #reveal { padding:50px 0; } .reveal-trophy { font-size:64px; display:inline-block; animation:spin 1.2s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  .reveal-txt { font-size:24px; font-weight:600; margin:18px 0 14px; }
+  .reveal-dots { font-size:40px; letter-spacing:8px; color:var(--fire); animation:blink 1s steps(1) infinite; }
+  @keyframes blink { 0%{opacity:.2;} 50%{opacity:1;} 100%{opacity:.2;} }
+  #resContent { display:none; }
+  .prizeline { font-size:14px; color:var(--go-dark); margin-bottom:14px; }
+  .podio { display:flex; flex-direction:column; align-items:center; gap:14px; margin:18px 0; }
+  .vcard { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px 44px; display:inline-flex; flex-direction:column; align-items:center; gap:6px; }
+  .vcard.small { padding:16px 30px; } .vcard.small .ve { font-size:42px; } .vcard.small .vn { font-size:20px; }
+  .vcard .ve { font-size:56px; animation:bob .6s ease-in-out infinite alternate; }
+  @keyframes bob { from{transform:translateY(0) scaleX(-1);} to{transform:translateY(-8px) scaleX(-1);} }
+  .vcard .vn { font-size:26px; font-weight:600; } .vcard .vl { font-size:13px; color:var(--go); font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
+  .outros { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .mini { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:8px; font-size:14px; }
+  .tstand { max-width:480px; margin:16px auto; text-align:left; }
+  .tcrown { text-align:center; font-size:15px; font-weight:600; color:var(--go-dark); margin-bottom:10px; }
+  .tbar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .tbar .tn { width:130px; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .tbar .tn i { width:10px; height:10px; border-radius:3px; display:inline-block; flex-shrink:0; }
+  .tbar .tt { flex:1; height:18px; border-radius:6px; background:var(--surface); overflow:hidden; border:1px solid var(--border); } .tbar .tt span { display:block; height:100%; }
+  .tbar .ts2 { font-size:13px; color:var(--ts); width:64px; text-align:right; }
+  .stats { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:16px 0; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; min-width:120px; } .sv { font-size:18px; font-weight:600; } .sl { font-size:12px; color:var(--ts); margin-top:2px; }
+  .full { max-width:380px; margin:8px auto; text-align:left; max-height:300px; overflow:auto; }
+  .full .ft { font-size:12px; color:var(--ts); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
+  .full .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; } .full .row:last-child { border-bottom:none; } .full .row .p { width:30px; font-weight:600; }
+  .seedline { font-size:13px; color:var(--ts); margin:14px 0; } .seedline code { background:var(--surface); padding:2px 8px; border-radius:6px; }
+  .acoes { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+  .savewrap { position:relative; display:inline-block; }
+  .savemenu { display:none; position:absolute; bottom:48px; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.14); z-index:30; flex-direction:column; gap:6px; min-width:220px; }
+  .savemenu.open { display:flex; }
+  .savemenu .savehead { font-size:12px; color:var(--ts); padding:2px 4px 6px; }
+  .savemenu .btn { justify-content:flex-start; width:100%; }
+</style>
+</head>
+<body>
+<div id="soundWrap" style="position:fixed;top:12px;right:12px;z-index:60">
+  <button id="soundBtn" class="btn btn-sm" style="background:var(--bg)" onclick="toggleSoundMenu(event)">🔊 Som ▾</button>
+  <div id="soundMenu" style="display:none;position:absolute;top:44px;right:0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);flex-direction:column;gap:6px;min-width:185px">
+    <div style="font-size:12px;color:var(--ts);padding:2px 4px 4px">Sons</div>
+    <button class="btn btn-sm" id="optSfx" style="justify-content:flex-start;width:100%" onclick="toggleSfx()">✓ 🔊 Ambiente</button>
+    <button class="btn btn-sm" id="optVoice" style="justify-content:flex-start;width:100%" onclick="toggleVoice()">○ 🗣️ Narração</button>
+  </div>
+</div>
+
+<div id="app">
+  <!-- CADASTRO -->
+  <div id="screen-cadastro" class="screen active">
+    <h2>🏇 Corrida de cavalos</h2>
+    <p class="sub">Cadastre os participantes e assistam juntos quem leva o prêmio!</p>
+
+    <div class="modesel">
+      <button class="mode-btn active" data-mode="single" onclick="setMode('single')">🏇 Corrida única</button>
+      <button class="mode-btn" data-mode="tournament" onclick="setMode('tournament')">🏆 Torneio</button>
+      <button class="mode-btn" data-mode="teams" onclick="setMode('teams')">👥 Por equipes</button>
+    </div>
+    <div class="modehint" id="modeHint">Uma corrida única decide o ganhador.</div>
+
+    <div class="input-row">
+      <input type="text" id="inp" placeholder="Nome do participante..." maxlength="40" autocomplete="off">
+      <select id="teamSel" style="display:none"></select>
+      <button class="btn" onclick="addOne()">Adicionar</button>
+    </div>
+    <div class="tools">
+      <button class="btn btn-sm" onclick="togglePanel('bulk')">📋 Colar lista</button>
+      <button class="btn btn-sm" onclick="limparTudo()">🗑️ Limpar tudo</button>
+    </div>
+
+    <div class="panel" id="teamsBox">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <input type="text" id="newTeam" placeholder="Nome da equipe / departamento" maxlength="24" style="min-width:160px">
+        <button class="btn btn-sm btn-go" onclick="criarEquipe()">Criar equipe</button>
+      </div>
+      <div id="teamChips" class="grid" style="margin-bottom:10px"></div>
+      <div class="hint">Crie as equipes e escolha a equipe de cada participante ao adicionar. Na lista colada, use "Nome, Equipe" em cada linha.</div>
+    </div>
+
+    <div class="panel" id="bulk">
+      <textarea id="ta" placeholder="Cole os nomes — um por linha&#10;&#10;Ana Souza&#10;Bruno Lima&#10;Carla Mendes"></textarea>
+      <div class="hint" style="margin:6px 0 8px">Um nome por linha (também aceita .txt colado). No modo equipes use "Nome, Equipe". Duplicados são ignorados.</div>
+      <button class="btn btn-sm btn-go" onclick="addBulk()">Adicionar lista</button>
+    </div>
+
+    <label class="fld">🏆 Prêmio em disputa (opcional)</label>
+    <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%">
+
+    <details>
+      <summary>Opções avançadas — sorteio justo</summary>
+      <label class="fld">Semente (opcional)</label>
+      <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%">
+      <div class="hint" style="margin-top:6px">Use a mesma semente para reproduzir exatamente a mesma corrida ou torneio.</div>
+    </details>
+
+    <div class="grid" id="lista"></div>
+    <div class="bottom">
+      <span class="msg" id="msg"></span>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="count" id="count">0 participantes</span>
+        <button class="btn btn-go" id="btnStart" onclick="iniciar()" disabled>Iniciar corrida</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CORRIDA -->
+  <div id="screen-corrida" class="screen">
+    <div class="race-head">
+      <div class="racelabel" id="racelabel"></div>
+      <h2 id="titulo">Corrida em andamento</h2>
+      <div class="raceprize" id="raceprize"></div>
+      <div class="narr" id="narr"></div>
+    </div>
+    <div class="scene"><div class="sun"></div><div class="stands"></div></div>
+    <div class="pista" id="pista"></div>
+  </div>
+
+  <!-- HEAT (torneio) -->
+  <div id="screen-heat" class="screen">
+    <h2 id="heatTitle"></h2>
+    <div id="heatWinner"></div>
+    <div id="heatBracket"></div>
+    <div class="acoes"><button class="btn btn-go" id="heatNext" onclick="continuarTorneio()">Continuar</button></div>
+  </div>
+
+  <!-- RESULTADO -->
+  <div id="res" class="screen">
+    <div id="reveal">
+      <div class="reveal-trophy">🏆</div>
+      <div class="reveal-txt">E o grande vencedor é...</div>
+      <div class="reveal-dots">● ● ●</div>
+    </div>
+    <div id="resContent">
+      <h2 id="resTitle">🏆 Resultado da corrida</h2>
+      <p class="sub" id="resSub"></p>
+      <div class="prizeline" id="prizeline"></div>
+      <div class="podio" id="podio"></div>
+      <div id="teamStandings"></div>
+      <div id="bracketBox"></div>
+      <div class="stats" id="stats"></div>
+      <div class="full" id="full"></div>
+      <div class="seedline" id="seedline"></div>
+      <div class="acoes">
+        <button class="btn btn-go" id="btnNova" onclick="novamente()">🎲 Novo</button>
+        <button class="btn" onclick="reprisar()">↻ Reprisar</button>
+        <button class="btn" onclick="editar()">Editar participantes</button>
+        <div class="savewrap" id="saveWrap">
+          <button class="btn" onclick="toggleSalvar(event)">💾 Salvar ▾</button>
+          <div id="saveMenu" class="savemenu">
+            <div class="savehead">O que deseja salvar?</div>
+            <button class="btn btn-sm" onclick="imprimirRanking();fecharSalvar()">📄 PDF do resultado</button>
+            <button class="btn btn-sm" onclick="certificado();fecharSalvar()">🏆 Certificado (PDF)</button>
+            <button class="btn btn-sm" onclick="salvarImagem();fecharSalvar()">🖼️ Imagem (PNG)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cd"><div id="cd-num"></div></div>
+<div id="flash"><div class="pf">📸 PHOTO FINISH!</div><div class="pf2">Chegada apertadíssima...</div></div>
+<canvas id="confetti" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+  const MAX=100, MAXHEAT=6, HORSES=['🐎','🦄','🐴'];
+  const PAL=['#534AB7','#D85A30','#1D9E75','#D4537E','#BA7517','#185FA5','#639922','#993C1D','#3C3489','#993556','#0F6E56','#A32D2D','#185FA5','#D4537E','#639922','#534AB7'];
+  const TEAMPAL=['#534AB7','#D85A30','#185FA5','#1D9E75','#D4537E','#BA7517','#993C1D','#3C3489'];
+  const MODE_HINTS={ single:'Uma corrida única decide o ganhador.', tournament:'Os participantes são divididos em eliminatórias; os vencedores avançam até a grande final.', teams:'Cada participante pertence a uma equipe. Além do vencedor individual, mostramos a equipe campeã por pontos.' };
+
+  let participantes=[], teamOf={}, teams=[], teamColors={}, cavalos=[], prize='', sim=null, lastSeed=null, mode='single';
+  let tour=null, tourMaster=null, tourBaseSeed=null;
+  let raf=null, celebRaf=null, gen=0, narrTimer=null, heartTimer=null, lastGalope=0, lastNarr=0, seqTimers=[], ended=false;
+  let audioCtx=null, master=null, muted=false, voiceOn=false, crowd=null, crowdGain=null, _positions=[];
+
+  const inp=document.getElementById('inp'), btnStart=document.getElementById('btnStart');
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') addOne(); });
+  document.getElementById('newTeam').addEventListener('keydown',e=>{ if(e.key==='Enter') criarEquipe(); });
+  document.addEventListener('click',e=>{ if(e.target.closest('.btn')) click(); },true);
+  if('speechSynthesis'in window){ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices(); }
+
+  function corOf(i){ return i<PAL.length?PAL[i]:`hsl(${(i*47)%360},62%,42%)`; }
+  function teamColor(t){ if(!(t in teamColors)) teamColors[t]=TEAMPAL[Math.max(0,teams.indexOf(t))%TEAMPAL.length]; return teamColors[t]; }
+  function esc(s){ return (''+s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function msg(t,ok){ const el=document.getElementById('msg'); el.textContent=t; el.style.color=ok?'var(--go-dark)':'var(--danger)'; }
+  function argmax(a){ let b=0; for(let i=1;i<a.length;i++) if(a[i]>a[b]) b=i; return b; }
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function shuffle(arr,rng){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const t=a[i];a[i]=a[j];a[j]=t; } return a; }
+  function makeHeats(arr,maxSize){ const k=Math.max(1,Math.ceil(arr.length/maxSize)); const h=Array.from({length:k},()=>[]); arr.forEach((x,i)=>h[i%k].push(x)); return h; }
+
+  /* ===== ÁUDIO ===== */
+  function audio(){ if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } } if(!master){ master=audioCtx.createGain(); master.gain.value=muted?0:1; master.connect(audioCtx.destination); } if(audioCtx.state==='suspended') audioCtx.resume(); return audioCtx; }
+  function applySound(){ if(master) master.gain.value=muted?0:1; const a=document.getElementById('optSfx'), v=document.getElementById('optVoice'), b=document.getElementById('soundBtn'); if(a) a.textContent=(muted?'○':'✓')+' 🔊 Ambiente'; if(v) v.textContent=(voiceOn?'✓':'○')+' 🗣️ Narração'; if(b) b.textContent=((!muted||voiceOn)?'🔊':'🔇')+' Som ▾'; }
+  function toggleSfx(){ muted=!muted; applySound(); }
+  function toggleVoice(){ voiceOn=!voiceOn; if(!voiceOn&&'speechSynthesis'in window) speechSynthesis.cancel(); applySound(); }
+  function toggleSoundMenu(e){ if(e) e.stopPropagation(); const m=document.getElementById('soundMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; }
+  function beep(f,d,t='sine',v=.14){ const c=audio(); if(!c)return; const o=c.createOscillator(),g=c.createGain(); o.type=t; o.frequency.value=f; g.gain.setValueAtTime(v,c.currentTime); g.gain.exponentialRampToValueAtTime(.001,c.currentTime+d); o.connect(g); g.connect(master); o.start(); o.stop(c.currentTime+d); }
+  function note(f,t,d,ty='sawtooth',v=.12){ const c=audio(); if(!c)return; const o=c.createOscillator(),g=c.createGain(); o.type=ty; o.frequency.value=f; const T=c.currentTime+t; g.gain.setValueAtTime(0,T); g.gain.linearRampToValueAtTime(v,T+.02); g.gain.setValueAtTime(v,T+Math.max(.05,d-.05)); g.gain.exponentialRampToValueAtTime(.001,T+d); o.connect(g); g.connect(master); o.start(T); o.stop(T+d+.03); }
+  function noise(d,v,f=1000,down){ const c=audio(); if(!c)return; const n=Math.floor(c.sampleRate*d); const buf=c.createBuffer(1,n,c.sampleRate); const dt=buf.getChannelData(0); for(let i=0;i<n;i++) dt[i]=Math.random()*2-1; const src=c.createBufferSource(); src.buffer=buf; const fl=c.createBiquadFilter(); fl.type='bandpass'; fl.frequency.value=f; fl.Q.value=.7; if(down) fl.frequency.linearRampToValueAtTime(f*.4,c.currentTime+d); const g=c.createGain(); g.gain.setValueAtTime(.0001,c.currentTime); g.gain.linearRampToValueAtTime(v,c.currentTime+d*.3); g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d); src.connect(fl); fl.connect(g); g.connect(master); src.start(); src.stop(c.currentTime+d); }
+  function bugle(){ [[392,0,.18],[523,.18,.18],[659,.36,.2],[784,.56,.34],[659,.92,.18],[784,1.1,.55]].forEach(a=>note(a[0],a[1],a[2],'sawtooth',.12)); }
+  function gun(){ noise(.22,.28,1600); beep(90,.28,'sine',.22); }
+  function bell(){ const c=audio(); if(!c)return; [880,1320,1760,2640].forEach((f,i)=>{ const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.value=f; const v=[.13,.07,.04,.02][i]; g.gain.setValueAtTime(v,c.currentTime); g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+1.5); o.connect(g); g.connect(master); o.start(); o.stop(c.currentTime+1.6); }); }
+  function galope(fast){ const p=fast?210:170; beep(p,.05,'sawtooth',.06); setTimeout(()=>beep(p-40,.05,'sawtooth',.045),fast?45:70); }
+  function applause(d=3){ for(let k=0;k<3;k++) setTimeout(()=>noise(d*.9,.06,2200+k*420),k*120); }
+  function winnerFanfare(){ [[523,0,.16],[659,.16,.16],[784,.32,.16],[1047,.48,.5],[784,.98,.16],[1047,1.14,.6]].forEach(a=>note(a[0],a[1],a[2],'sawtooth',.13)); }
+  function drumroll(d=2.4){ const c=audio(); if(!c)return; const n=Math.floor(d/.045); for(let i=0;i<n;i++){ const t=i*.045,v=.04+.07*(i/n); const o=c.createOscillator(),g=c.createGain(); o.type='triangle'; o.frequency.value=i%2?150:120; const T=c.currentTime+t; g.gain.setValueAtTime(v,T); g.gain.exponentialRampToValueAtTime(.001,T+.04); o.connect(g); g.connect(master); o.start(T); o.stop(T+.05); } }
+  function cymbal(){ noise(1.3,.12,4500); }
+  function shutter(){ beep(2200,.02,'square',.1); setTimeout(()=>beep(1600,.02,'square',.08),55); noise(.12,.06,3000); }
+  function heartbeat(){ beep(60,.12,'sine',.16); setTimeout(()=>beep(54,.1,'sine',.12),160); }
+  function reactOhh(){ noise(.6,.06,700,true); }
+  function reactCheer(){ noise(.5,.06,2000); }
+  function pop(){ beep(700+Math.random()*500,.08,'sine',.06); noise(.1,.04,2500); }
+  function click(){ beep(900,.04,'square',.05); }
+  function say(t,prio){ if(!voiceOn||!('speechSynthesis'in window))return; try{ if(prio){ speechSynthesis.cancel(); } else if(speechSynthesis.speaking||speechSynthesis.pending){ return; } const u=new SpeechSynthesisUtterance(t); u.lang='pt-BR'; u.rate=prio?1.45:1.32; u.pitch=prio?1.45:1.25; u.volume=.9; const vs=speechSynthesis.getVoices(); const v=vs.find(x=>/pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name))||vs.find(x=>/^pt/i.test(x.lang)); if(v)u.voice=v; speechSynthesis.speak(u); }catch(e){} }
+  function crowdStart(){ const c=audio(); if(!c||crowd)return; const n=Math.floor(c.sampleRate*2); const buf=c.createBuffer(1,n,c.sampleRate); const d=buf.getChannelData(0); let last=0; for(let i=0;i<n;i++){ const w=Math.random()*2-1; last=(last+.02*w)/1.02; d[i]=last*3.2; } crowd=c.createBufferSource(); crowd.buffer=buf; crowd.loop=true; const f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=650; f.Q.value=.5; crowdGain=c.createGain(); crowdGain.gain.value=.02; crowd.connect(f); f.connect(crowdGain); crowdGain.connect(master); crowd.start(); }
+  function crowdSet(v){ if(crowdGain&&audioCtx) crowdGain.gain.setTargetAtTime(v,audioCtx.currentTime,.3); }
+  function crowdStop(){ if(crowd){ try{crowd.stop();}catch(e){} crowd=null; crowdGain=null; } }
+  function startHeart(){ stopHeart(); heartTimer=setInterval(heartbeat,640); }
+  function stopHeart(){ if(heartTimer){ clearInterval(heartTimer); heartTimer=null; } }
+  function seq(ms,fn){ seqTimers.push(setTimeout(fn,ms)); }
+  function clearSeq(){ seqTimers.forEach(clearTimeout); seqTimers=[]; }
+
+  /* ===== MODOS ===== */
+  function setMode(m){ mode=m; document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===m)); document.getElementById('modeHint').textContent=MODE_HINTS[m]; document.getElementById('teamsBox').style.display=m==='teams'?'block':'none'; document.getElementById('teamSel').style.display=m==='teams'?'':'none'; if(m==='teams') buildTeamSel(); btnStart.textContent = m==='tournament'?'Iniciar torneio':(m==='teams'?'Iniciar (equipes)':'Iniciar corrida'); renderLista(); }
+
+  /* ===== EQUIPES ===== */
+  function criarEquipe(){ const n=document.getElementById('newTeam').value.trim().slice(0,24); if(!n)return; if(!teams.some(t=>t.toLowerCase()===n.toLowerCase())){ teams.push(n); teamColor(n); } document.getElementById('newTeam').value=''; renderTeamChips(); buildTeamSel(); }
+  function removerEquipe(i){ const t=teams[i]; teams.splice(i,1); Object.keys(teamOf).forEach(k=>{ if(teamOf[k]===t) delete teamOf[k]; }); renderTeamChips(); buildTeamSel(); renderLista(); }
+  function renderTeamChips(){ const el=document.getElementById('teamChips'); if(!teams.length){ el.innerHTML='<div class="empty">Nenhuma equipe criada ainda.</div>'; return; } el.innerHTML=teams.map((t,i)=>`<div class="chip"><span class="teamtag" style="background:${teamColor(t)}">&nbsp;</span><span class="n">${esc(t)}</span><button class="x" onclick="removerEquipe(${i})">&times;</button></div>`).join(''); }
+  function buildTeamSel(){ const s=document.getElementById('teamSel'); s.innerHTML = teams.length?teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join(''):'<option value="">(crie uma equipe)</option>'; }
+
+  /* ===== CADASTRO ===== */
+  function addOne(){ const n=inp.value.trim(); if(!n)return; const before=participantes.length; const team=(mode==='teams')?document.getElementById('teamSel').value:null; addNames([n],team); if(participantes.length>before) inp.value=''; }
+  function parseNames(t){ return t.split(/[\n,;\t]+/).map(s=>s.trim().slice(0,40)).filter(Boolean); }
+  function addBulk(){ const raw=document.getElementById('ta').value; if(mode==='teams') addBulkTeams(raw); else { const names=parseNames(raw); if(!names.length){ msg('Cole alguns nomes primeiro.',false); return; } addNames(names); } document.getElementById('ta').value=''; }
+  function addBulkTeams(raw){ const lines=raw.split(/\n+/).map(l=>l.trim()).filter(Boolean); if(!lines.length){ msg('Cole alguns nomes primeiro.',false); return; } let add=0,dup=0,full=0; for(const line of lines){ const parts=line.split(/[,;\t]/); const name=(parts[0]||'').trim().slice(0,40); const team=(parts.slice(1).join(',')||'').trim().slice(0,24); if(!name)continue; if(participantes.length>=MAX){full++;continue;} if(participantes.some(p=>p.toLowerCase()===name.toLowerCase())){dup++;continue;} if(team&&!teams.some(t=>t.toLowerCase()===team.toLowerCase())){ teams.push(team); teamColor(team); } participantes.push(name); if(team) teamOf[name]=team; add++; } renderTeamChips(); buildTeamSel(); renderLista(); resumo(add,dup,full); }
+  function addNames(names,team){ let add=0,dup=0,full=0; for(const raw of names){ const n=raw.trim().slice(0,40); if(!n)continue; if(participantes.length>=MAX){full++;continue;} if(participantes.some(p=>p.toLowerCase()===n.toLowerCase())){dup++;continue;} participantes.push(n); if(team) teamOf[n]=team; add++; } renderLista(); resumo(add,dup,full); return add>0; }
+  function resumo(add,dup,full){ let p=[]; if(add)p.push(`${add} adicionado${add>1?'s':''}`); if(dup)p.push(`${dup} duplicado${dup>1?'s':''} ignorado${dup>1?'s':''}`); if(full)p.push(`${full} além do limite de ${MAX}`); if(p.length) msg(p.join(' · '),add>0); }
+  function removerP(i){ const n=participantes[i]; participantes.splice(i,1); delete teamOf[n]; renderLista(); }
+  function limparTudo(){ participantes=[]; teamOf={}; renderLista(); msg('Lista limpa.',true); }
+  function togglePanel(id){ document.getElementById(id).classList.toggle('open'); }
+  function renderLista(){ const el=document.getElementById('lista'); document.getElementById('count').textContent=participantes.length+(participantes.length===1?' participante':' participantes'); btnStart.disabled=participantes.length<2; if(!participantes.length){ el.innerHTML='<div class="empty">Nenhum participante ainda. Adicione pelo menos 2 para começar.</div>'; return; } el.innerHTML=participantes.map((n,i)=>{ const tg=(mode==='teams'&&teamOf[n])?`<span class="teamtag" style="background:${teamColor(teamOf[n])}">${esc(teamOf[n])}</span>`:''; return `<div class="chip"><span class="e">${HORSES[i%3]}</span><span class="n">${esc(n)}</span>${tg}<button class="x" onclick="removerP(${i})" aria-label="Remover">&times;</button></div>`; }).join(''); }
+  function tela(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+
+  /* ===== NARRAÇÃO ===== */
+  const N_INI=['E os cavalos disparam na largada!','A emoção toma conta da pista!','Largada eletrizante!','O público está em pé!'];
+  const N_MEIO=[l=>`${l} abre vantagem na ponta!`,l=>`${l} está voando!`,()=>`Disputa acirradíssima na frente!`,l=>`${l} quer muito essa vitória!`,()=>`O pelotão está coladinho!`,l=>`${l} acelera por fora!`];
+  const N_BURST=[n=>`${n} DISPARA!`,n=>`Que arrancada de ${n}!`,n=>`${n} muda de marcha!`];
+  const N_RETA=['RETA FINAL! Todos a mil!','É agora ou nunca! Reta final!','O público delira na reta final!'];
+  const N_FIM=[v=>`${v} cruza a linha em primeiro!`,v=>`É ${v}! Que corrida inesquecível!`,v=>`${v} vence! Temos um campeão!`];
+  function rnd(a){ return a[(Math.random()*a.length)|0]; }
+  function narrar(t,fire,prio,spk){ const el=document.getElementById('narr'); lastNarr=performance.now(); el.classList.toggle('fire',!!fire); el.style.opacity='0'; setTimeout(()=>{ el.textContent=t; el.style.opacity='1'; },170); say(spk!==undefined?spk:t,prio); }
+  function canNarr(){ return performance.now()-lastNarr>1400; }
+  function curLeaderIdx(){ let b=0; for(let i=1;i<_positions.length;i++) if(_positions[i]>_positions[b]) b=i; return b; }
+  function startNarracoes(){ narrar(rnd(N_INI)); const loop=()=>{ narrTimer=setTimeout(()=>{ if(ended)return; if(canNarr()){ const lider=cavalos[curLeaderIdx()]; if(lider) narrar(rnd(N_MEIO)(lider.nome)); } loop(); }, 2800+Math.random()*1800); }; loop(); }
+
+  /* ===== SIMULAÇÃO (determinística) ===== */
+  function simulate(seed){
+    const rng=mulberry32(seed>>>0), n=cavalos.length, FIM=96, STEP=33, maxSteps=4500;
+    const h=cavalos.map(()=>({pos:0,vel:.0016+rng()*.0008,burst:0,stumble:0,finished:false,fs:-1,muddone:false}));
+    const mud=[]; const mc=n>=4?(1+(rng()<.5?1:0)):0; for(let m=0;m<mc;m++) mud.push(28+rng()*44);
+    const frames=[], events=[], gain=new Array(n).fill(0), surges=new Array(n).fill(0); const splitDone={25:0,50:0,75:0};
+    let prevLeader=-1, leadChanges=0, prevRank=null, step=0;
+    const lead=()=>{ let b=0; for(let i=1;i<n;i++) if(h[i].pos>h[b].pos) b=i; return b; };
+    while(step<maxSteps){
+      const lp=Math.max.apply(null,h.map(x=>x.pos)); const reta=lp>FIM*.72;
+      for(let i=0;i<n;i++){ const x=h[i]; if(x.finished)continue;
+        x.vel=Math.max(.0012,Math.min(.0042,x.vel+(rng()-.45)*.0016));
+        if(x.stumble>0) x.stumble-=STEP; else if(!reta&&rng()<.0009){ x.stumble=380+rng()*460; events.push({step,t:'trip',i}); }
+        if(x.burst>0) x.burst-=STEP; else if(rng()<(reta?.012:.004)){ x.burst=500+rng()*800; surges[i]++; events.push({step,t:'burst',i}); }
+        let mult=1; if(x.stumble>0)mult*=.35; if(x.burst>0)mult*=1.8; if(reta)mult*=1.25;
+        for(const mz of mud){ if(Math.abs(x.pos-mz)<2.5){ mult*=.6; if(!x.muddone&&rng()<.4){ x.muddone=true; events.push({step,t:'mud',i}); } } }
+        const eff=x.vel*mult+Math.max(0,lp-x.pos)*.000022;
+        x.pos=Math.min(FIM,x.pos+eff*STEP);
+        if(x.pos>=FIM&&!x.finished){ x.finished=true; x.fs=step; }
+      }
+      [25,50,75].forEach(p=>{ if(!splitDone[p]&&lp>=p){ splitDone[p]=1; events.push({step,t:'split',p,i:lead()}); } });
+      const li=lead(); if(prevLeader!==-1&&li!==prevLeader){ leadChanges++; events.push({step,t:'lead',i:li}); } prevLeader=li;
+      const order=h.map((_,i)=>i).sort((a,b)=>h[b].pos-h[a].pos); const rank=new Array(n); order.forEach((idx,r)=>rank[idx]=r);
+      if(prevRank){ for(let i=0;i<n;i++) if(rank[i]<prevRank[i]) gain[i]+=prevRank[i]-rank[i]; } prevRank=rank;
+      frames.push(h.map(x=>x.pos)); step++;
+      if(h.every(x=>x.finished)) break;
+    }
+    const fin=h.map((x,i)=>({i,fs:x.fs<0?step:x.fs,pos:x.pos})).sort((a,b)=>(a.fs-b.fs)||(b.pos-a.pos)).map(o=>o.i);
+    const close=fin.length>1 ? (h[fin[1]].fs-h[fin[0]].fs)<=3 : false;
+    return {frames,events,order:fin,totalSteps:frames.length,STEP,FIM,close,leadChanges,gain,surges,mud,seed};
+  }
+
+  /* ===== CONTROLE ===== */
+  function chosenSeed(forceRandom){ const v=document.getElementById('seedInp').value.trim(); if(!forceRandom&&v&&/^\d+$/.test(v)) return parseInt(v,10)>>>0; return (Math.random()*4294967296)>>>0; }
+  function clearAll(){ gen++; if(raf)cancelAnimationFrame(raf); if(celebRaf)cancelAnimationFrame(celebRaf); clearTimeout(narrTimer); clearSeq(); stopHeart(); crowdStop(); hideCD(); const fl=document.getElementById('flash'); if(fl) fl.style.display='none'; if('speechSynthesis'in window) speechSynthesis.cancel(); ended=false; }
+  function setHeader(t,fire){ const h=document.getElementById('titulo'); h.textContent=t; h.classList.toggle('fire',!!fire); }
+
+  function iniciar(){ if(mode==='tournament'){ startTournament(chosenSeed(false)); } else { lastSeed=chosenSeed(false); runRace(participantes, lastSeed, mode==='teams'?'👥 Corrida por equipes':''); } }
+  function novamente(){ if(mode==='tournament'){ startTournament(chosenSeed(true)); } else { lastSeed=chosenSeed(true); runRace(participantes, lastSeed, mode==='teams'?'👥 Corrida por equipes':''); } }
+  function reprisar(){ if(lastSeed==null)return; if(mode==='tournament'){ startTournament(lastSeed); } else { runRace(participantes, lastSeed, mode==='teams'?'👥 Corrida por equipes':''); } }
+
+  function runRace(names, seed, label){
+    audio(); clearAll();
+    prize=document.getElementById('prizeInp').value.trim();
+    cavalos=names.map((nome,i)=>({nome, team:(teamOf[nome]||null), emoji:HORSES[i%3], cor:corOf(i), idx:i}));
+    sim=simulate(seed);
+    renderPista();
+    tela('screen-corrida');
+    document.getElementById('racelabel').textContent=label||'';
+    setHeader('Preparando...',false);
+    const showPrize=(mode!=='tournament')||(tour&&tour.isFinal);
+    document.getElementById('raceprize').textContent=(prize&&showPrize)?('🏆 Em disputa: '+prize):'';
+    const nv=document.getElementById('narr'); nv.classList.remove('fire'); nv.textContent='Cavalos a postos na linha de largada...';
+    document.getElementById('pista').classList.remove('reta');
+    crowdStart(); crowdSet(.02); bugle(); say('Cavalos a postos!',true);
+    seq(1600,()=>{ showCD('3'); beep(580,.16,'square',.16); say('três',true); });
+    seq(2250,()=>{ showCD('2'); beep(580,.16,'square',.16); say('dois',true); });
+    seq(2900,()=>{ showCD('1'); beep(580,.16,'square',.16); say('um',true); });
+    seq(3550,()=>{ showCD('VAI!'); gun(); crowdSet(.045); say('E largaram!',true); setHeader('Corrida em andamento',false); startNarracoes(); startPlayback(); });
+    seq(4250,()=>hideCD());
+  }
+  function renderPista(){
+    const n=cavalos.length, h=n<=10?48:(n<=16?40:Math.max(20,Math.floor(660/n)));
+    const em=h<30?0:Math.round(h*.5), nf=h<26?10:11, bs=h<28?16:19, fs=h<26?9:10, dot=Math.min(12,Math.round(h*.32)), showTeam=(mode==='teams'&&h>=40);
+    const mudHtml=sim?sim.mud.map(mz=>`<div class="mud" style="left:${mz}%"></div>`).join(''):'';
+    document.getElementById('pista').innerHTML=cavalos.map((c,i)=>{
+      const marker=em?`<span class="h" style="font-size:${em}px">${c.emoji}</span>`:`<span class="dot" style="width:${dot}px;height:${dot}px;background:${c.cor}"></span>`;
+      const teamHtml=(showTeam&&c.team)?`<span class="tt2" style="background:${teamColor(c.team)}">${esc(c.team)}</span>`:'';
+      return `<div class="raia" id="raia-${i}" style="height:${h}px"><div class="raia-n">${i+1}</div><div class="track">${mudHtml}<div class="finish"></div><div class="cav" id="cav-${i}" style="left:0%"><span class="badge" id="bdg-${i}" style="width:${bs}px;height:${bs}px;font-size:${fs}px">${i+1}</span>${marker}<span class="label" style="color:${c.cor};font-size:${nf}px">${esc(c.nome)}</span>${teamHtml}</div></div></div>`;
+    }).join('');
+  }
+  function frameAt(t){ if(!sim||!sim.frames||!sim.frames.length) return []; const lastF=sim.frames[sim.frames.length-1]; let i0=Math.floor(t/sim.STEP); if(i0>=sim.frames.length-1) return lastF; if(i0<0) i0=0; const i1=i0+1, a=(t/sim.STEP)-i0; const A=sim.frames[i0],B=sim.frames[i1]; if(!A||!B) return lastF; const r=new Array(A.length); for(let k=0;k<A.length;k++) r[k]=A[k]+(B[k]-A[k])*a; return r; }
+  function setBadge(idx,rank){ const b=document.getElementById('bdg-'+idx); if(b){ b.textContent=rank+1; b.style.background=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } }
+  function updateRanks(p){ if(!sim) return; const FIM=sim.FIM, n=p.length; const fr=new Array(n); sim.order.forEach((idx,r)=>{ fr[idx]=r; }); const racing=[]; for(let i=0;i<n;i++){ if(p[i]>=FIM-0.1) setBadge(i,fr[i]); else racing.push(i); } const finished=n-racing.length; racing.sort((a,b)=>p[b]-p[a]); racing.forEach((idx,k)=>setBadge(idx,finished+k)); }
+  function onReta(){ setHeader('🔥 Reta final!',true); document.getElementById('pista').classList.add('reta'); const tx=rnd(N_RETA); narrar(tx,true,true,tx.toLowerCase()); bell(); setTimeout(bell,300); crowdSet(.06); startHeart(); }
+  function handleEvent(e,reta){ const nm=e.i!=null?(cavalos[e.i]||{}).nome:''; if(e.t==='trip'){ narrar(`Ohhh! ${nm} tropeça!`,reta,false,`${nm} tropeça!`); reactOhh(); } else if(e.t==='mud'){ narrar(`${nm} pega a lama e perde ritmo!`,reta); reactOhh(); } else if(e.t==='split'){ narrar(`Parcial dos ${e.p}%: ${nm} na frente!`,reta); } else if(e.t==='burst'){ if(canNarr()){ const tx=rnd(N_BURST)(nm); narrar(tx,reta,false,tx.toLowerCase()); reactCheer(); } } else if(e.t==='lead'){ if(canNarr()){ narrar(`Que virada! ${nm} assume a ponta!`,reta); reactCheer(); } } }
+
+  function startPlayback(){
+    if(!sim||!sim.frames||!sim.frames.length){ return; }
+    ended=false; const myGen=gen; _positions=[]; let simTime=0; const dur=sim.totalSteps*sim.STEP; let last=performance.now(), evIdx=0, reta=false;
+    const loop=now=>{
+      if(ended||gen!==myGen)return; const dt=Math.min(now-last,50); last=now;
+      _positions=frameAt(simTime); const lp=_positions.length?Math.max.apply(null,_positions):0;
+      simTime+=dt;
+      for(let i=0;i<_positions.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=_positions[i].toFixed(2)+'%'; }
+      updateRanks(_positions);
+      if(now-lastGalope>(reta?150:280)){ galope(reta); lastGalope=now; }
+      if(!reta&&lp>sim.FIM*.72){ reta=true; onReta(); }
+      const ns=simTime/sim.STEP; while(evIdx<sim.events.length&&sim.events[evIdx].step<=ns){ handleEvent(sim.events[evIdx],reta); evIdx++; }
+      if(simTime>=dur){ endRace(); return; }
+      raf=requestAnimationFrame(loop);
+    };
+    raf=requestAnimationFrame(loop);
+  }
+  function endRace(){
+    if(ended)return; ended=true; if(raf)cancelAnimationFrame(raf); clearTimeout(narrTimer); stopHeart();
+    const fin=sim.frames[sim.totalSteps-1]; for(let i=0;i<fin.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=fin[i].toFixed(2)+'%'; }
+    sim.order.forEach((idx,rank)=>{ const b=document.getElementById('bdg-'+idx); if(b){ b.textContent=rank+1; b.style.background=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
+    sim.order.slice(0,3).forEach(i=>{ const r=document.getElementById('raia-'+i); if(r) r.style.background='rgba(29,158,117,.16)'; });
+    setHeader('Corrida encerrada!',false);
+    const v=cavalos[sim.order[0]];
+    if(sim.close){ photoFinish(()=>afterRace()); }
+    else { narrar(rnd(N_FIM)(v.nome),true,true); crowdSet(.08); seq(1500,()=>afterRace()); }
+  }
+  function photoFinish(cb){ const o=document.getElementById('flash'); o.style.display='flex'; shutter(); narrar('PHOTO FINISH! Chegada apertadíssima!',true,true,'Chegada apertadíssima!'); crowdSet(.07); seq(1900,()=>{ o.style.display='none'; cb(); }); }
+
+  function afterRace(){
+    if(mode==='tournament'){
+      const w=cavalos[sim.order[0]].nome;
+      tour.advancing.push(w);
+      tour.bracket[tour.bracket.length-1].heats[tour.heatIdx].winner=w;
+      if(tour.isFinal){ goReveal(); } else { showHeatResult(w); }
+    } else { goReveal(); }
+  }
+
+  /* ===== TORNEIO ===== */
+  function startTournament(seed){
+    audio(); clearAll();
+    tourBaseSeed=seed; lastSeed=seed; tourMaster=mulberry32(seed>>>0);
+    const contest=shuffle(participantes,tourMaster);
+    tour={ round:1, bracket:[], heats:[], heatIdx:0, advancing:[], isFinalRound:false, isFinal:false, contest };
+    beginRound();
+  }
+  function roundName(){ if(tour.isFinalRound) return 'Final'; if(tour.round===1) return 'Eliminatórias'; return 'Rodada '+tour.round; }
+  function beginRound(){
+    tour.heats=makeHeats(tour.contest,MAXHEAT); tour.heatIdx=0; tour.advancing=[]; tour.isFinalRound=(tour.heats.length===1);
+    tour.bracket.push({ name:roundName(), isFinal:tour.isFinalRound, heats:tour.heats.map(h=>({names:h.slice(),winner:null})) });
+    runHeatRace();
+  }
+  function nextHeatSeed(){ return (tourMaster()*4294967296)>>>0; }
+  function runHeatRace(){
+    tour.isFinal=tour.isFinalRound;
+    const names=tour.heats[tour.heatIdx], seed=nextHeatSeed();
+    const label=tour.isFinalRound ? '🏆 Torneio · Grande Final' : `🏆 Torneio · ${roundName()} · Eliminatória ${tour.heatIdx+1} de ${tour.heats.length}`;
+    runRace(names, seed, label);
+  }
+  function showHeatResult(w){
+    tela('screen-heat');
+    const isLast=tour.heatIdx===tour.heats.length-1;
+    document.getElementById('heatTitle').textContent=`${roundName()} · Eliminatória ${tour.heatIdx+1}/${tour.heats.length} concluída`;
+    const c=cavalos[sim.order[0]];
+    document.getElementById('heatWinner').innerHTML=`<div class="podio"><div class="vcard small"><div class="ve">${c.emoji}</div><div class="vn">${esc(w)}</div><div class="vl">avança de fase</div></div></div>`;
+    document.getElementById('heatBracket').innerHTML=bracketHtml();
+    let nextLabel='Próxima eliminatória';
+    if(isLast){ const next=makeHeats(tour.advancing,MAXHEAT); nextLabel = next.length===1?'🏆 Ir para a Grande Final':'Próxima rodada'; }
+    document.getElementById('heatNext').textContent=nextLabel;
+    applause(1.4); say(w+' avança para a próxima fase!',true);
+    crowdSet(0); seq(1200,()=>crowdStop());
+  }
+  function continuarTorneio(){
+    tour.heatIdx++;
+    if(tour.heatIdx<tour.heats.length){ runHeatRace(); }
+    else { tour.contest=tour.advancing.slice(); tour.round++; beginRound(); }
+  }
+  function bracketHtml(){
+    if(!tour||!tour.bracket.length) return '';
+    return '<div class="bracket">'+tour.bracket.map(r=>`<div class="bk-round"><div class="rh">${esc(r.name)}</div>${r.heats.map((h,i)=>{ const lbl=r.isFinal?'Final':('Eliminatória '+(i+1)); return `<div class="bk-heat">${lbl}: ${h.names.map(esc).join(', ')}${h.winner?` → <span class="win">${esc(h.winner)} ✓</span>`:' → <em>aguardando</em>'}</div>`; }).join('')}</div>`).join('')+'</div>';
+  }
+
+  /* ===== RESULTADO ===== */
+  function goReveal(){
+    tela('res'); buildResult();
+    document.getElementById('reveal').style.display='block'; document.getElementById('resContent').style.display='none';
+    crowdSet(.04); drumroll(2.4); say('E o grande vencedor é...',true);
+    seq(2600,()=>{
+      document.getElementById('reveal').style.display='none'; document.getElementById('resContent').style.display='block';
+      cymbal(); winnerFanfare(); applause(3); crowdSet(.1); celebration();
+      const v=cavalos[sim.order[0]]; say('O vencedor é '+v.nome+'!',true);
+      seq(4200,()=>{ crowdSet(0); crowdStop(); });
+    });
+  }
+  function buildResult(){
+    const v=cavalos[sim.order[0]], isTour=(mode==='tournament');
+    document.getElementById('resTitle').textContent = isTour?'🏆 Campeão do torneio':'🏆 Resultado da corrida';
+    document.getElementById('resSub').textContent = isTour?'Grande final do torneio':`Corrida com ${cavalos.length} participantes`;
+    document.getElementById('prizeline').textContent = prize?('🏆 '+v.nome+' leva: '+prize):'';
+    document.getElementById('podio').innerHTML=`<div class="vcard"><div class="ve">${v.emoji}</div><div class="vn">${esc(v.nome)}</div><div class="vl">${isTour?'Campeão':'Vencedor'}</div></div><div class="outros">${sim.order.slice(1,3).map((idx,i)=>{const c=cavalos[idx];return `<div class="mini">${['🥈','🥉'][i]} <span>${c.emoji}</span> ${esc(c.nome)}</div>`;}).join('')}</div>`;
+    document.getElementById('teamStandings').innerHTML=(mode==='teams')?teamStandingsHtml():'';
+    document.getElementById('bracketBox').innerHTML=isTour?('<div class="bk-round" style="max-width:560px;margin:0 auto"><div class="rh" style="text-align:center">Caminho até o título</div></div>'+bracketHtml()):'';
+    const ot=argmax(sim.gain), su=argmax(sim.surges);
+    document.getElementById('stats').innerHTML=`<div class="stat"><div class="sv">${sim.leadChanges}</div><div class="sl">viradas de liderança</div></div><div class="stat"><div class="sv">${esc(cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div><div class="stat"><div class="sv">${esc(cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>${sim.close?'<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>':''}`;
+    document.getElementById('full').innerHTML='<div class="ft">'+(isTour?'Classificação da final':'Classificação completa')+'</div>'+sim.order.map((idx,p)=>{const c=cavalos[idx];return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${esc(c.nome)}</span></div>`;}).join('');
+    document.getElementById('seedline').innerHTML=`Semente: <code>${isTour?tourBaseSeed:sim.seed}</code> <button class="btn btn-sm" onclick="copiarSemente(${isTour?tourBaseSeed:sim.seed})">Copiar</button> <span class="hint">— reproduza em "Opções avançadas"</span>`;
+    document.getElementById('btnNova').textContent = isTour?'🎲 Novo torneio':'🎲 Nova corrida';
+  }
+  function teamStandingsHtml(){
+    const N=cavalos.length, score={};
+    sim.order.forEach((idx,p)=>{ const t=cavalos[idx].team||'Sem equipe'; score[t]=(score[t]||0)+(N-p); });
+    const ranked=Object.keys(score).sort((a,b)=>score[b]-score[a]); if(!ranked.length) return ''; const mx=score[ranked[0]];
+    return `<div class="tstand"><div class="tcrown">🏆 Equipe campeã: ${esc(ranked[0])}</div>`+ranked.map(t=>{ const w=Math.round(score[t]/mx*100); const col=t==='Sem equipe'?'#9b9a92':teamColor(t); return `<div class="tbar"><div class="tn"><i style="background:${col}"></i>${esc(t)}</div><div class="tt"><span style="width:${w}%;background:${col}"></span></div><div class="ts2">${score[t]} pts</div></div>`; }).join('')+`</div>`;
+  }
+  function copiarSemente(s){ try{ navigator.clipboard.writeText(''+s); msg('Semente copiada!',true); }catch(e){ msg('Semente: '+s,true); } }
+  function toggleSalvar(e){ if(e) e.stopPropagation(); document.getElementById('saveMenu').classList.toggle('open'); }
+  function fecharSalvar(){ const m=document.getElementById('saveMenu'); if(m) m.classList.remove('open'); }
+  document.addEventListener('click',e=>{ if(!e.target.closest('#saveWrap')) fecharSalvar(); });
+  function editar(){ clearAll(); tour=null; tela('screen-cadastro'); }
+
+  /* ===== PDF / IMAGEM ===== */
+  function dataHoje(){ return new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}); }
+  function imprimirRanking(){
+    if(!window.jspdf){ msg('PDF indisponível, gerando imagem...',true); salvarImagem(); return; }
+    try{
+      const { jsPDF }=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'}); const W=210; let y=22; const v=cavalos[sim.order[0]];
+      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(44,44,42); doc.text('Corrida de Cavalos Corporativa',W/2,y,{align:'center'}); y+=8;
+      doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(110,110,110); doc.text((mode==='tournament'?'Torneio — ':'')+'Sorteio em '+dataHoje(),W/2,y,{align:'center'}); y+=14;
+      doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(29,158,117); doc.text((mode==='tournament'?'Campeao: ':'Vencedor: ')+v.nome,20,y); y+=8;
+      if(prize){ doc.setFontSize(11); doc.setTextColor(15,110,86); doc.text('Premio: '+prize,20,y); y+=8; }
+      doc.setTextColor(44,44,42); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(mode==='tournament'?'Classificacao da final':'Classificacao completa',20,y); y+=8;
+      doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(60,60,60);
+      sim.order.forEach((idx,p)=>{ if(y>280){ doc.addPage(); y=22; } doc.text(`${p+1}o   ${cavalos[idx].nome}`,24,y); y+=6.5; });
+      if(y>284){ doc.addPage(); y=22; } doc.setTextColor(150,150,150); doc.setFontSize(9); doc.text('Semente: '+(mode==='tournament'?tourBaseSeed:sim.seed),20,y+6);
+      doc.save('resultado-corrida.pdf'); msg('PDF do resultado gerado!',true);
+    }catch(e){ msg('Não foi possível gerar o PDF, gerando imagem...',true); salvarImagem(); }
+  }
+  function certificado(){
+    if(!window.jspdf){ msg('PDF indisponível, gerando imagem...',true); salvarImagem(); return; }
+    try{
+      const { jsPDF }=window.jspdf; const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}); const W=297,H=210; const v=cavalos[sim.order[0]];
+      doc.setDrawColor(186,117,23); doc.setLineWidth(2); doc.rect(12,12,W-24,H-24); doc.setLineWidth(.4); doc.rect(16,16,W-32,H-32);
+      doc.setTextColor(186,117,23); doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.text('CERTIFICADO DE VITORIA',W/2,48,{align:'center'});
+      doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(13); doc.text('Concedido a',W/2,78,{align:'center'});
+      doc.setTextColor(44,44,42); doc.setFont('helvetica','bold'); doc.setFontSize(36); doc.text(v.nome,W/2,99,{align:'center'});
+      doc.setFont('helvetica','normal'); doc.setFontSize(13); doc.setTextColor(90,90,90); doc.text(mode==='tournament'?'por vencer o Torneio de Corrida de Cavalos':'por vencer a Corrida de Cavalos Corporativa',W/2,120,{align:'center'});
+      if(prize){ doc.setTextColor(15,110,86); doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text('Premio: '+prize,W/2,135,{align:'center'}); }
+      doc.setTextColor(120,120,120); doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.text(dataHoje(),W/2,168,{align:'center'});
+      doc.save('certificado-vitoria.pdf'); msg('Certificado em PDF gerado!',true);
+    }catch(e){ msg('Não foi possível gerar o PDF, gerando imagem...',true); salvarImagem(); }
+  }
+  function salvarImagem(){ try{ const v=cavalos[sim.order[0]]; const c=document.createElement('canvas'); c.width=900; c.height=560; const x=c.getContext('2d'); x.fillStyle='#f5f4ef'; x.fillRect(0,0,900,560); x.fillStyle='#BA7517'; x.fillRect(0,0,900,8); x.textAlign='center'; x.fillStyle='#2c2c2a'; x.font='bold 34px sans-serif'; x.fillText('Corrida de Cavalos Corporativa',450,80); x.font='16px sans-serif'; x.fillStyle='#6b6a64'; x.fillText((mode==='tournament'?'Torneio — ':'')+'Sorteio em '+dataHoje(),450,112); x.font='bold 20px sans-serif'; x.fillStyle='#1D9E75'; x.fillText(mode==='tournament'?'CAMPEÃO':'VENCEDOR',450,180); x.font='bold 56px sans-serif'; x.fillStyle='#2c2c2a'; x.fillText(v.nome,450,240); if(prize){ x.font='18px sans-serif'; x.fillStyle='#0F6E56'; x.fillText('Prêmio: '+prize,450,280); } x.font='bold 17px sans-serif'; x.fillStyle='#2c2c2a'; x.textAlign='left'; let yy=350; x.fillText('Classificação:',120,yy); x.font='16px sans-serif'; x.fillStyle='#444'; sim.order.slice(0,8).forEach((idx,p)=>{ yy+=26; x.fillText(`${p+1}º  ${cavalos[idx].nome}`,140,yy); }); c.toBlob(b=>{ const url=URL.createObjectURL(b); const a=document.createElement('a'); a.href=url; a.download='resultado-corrida.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000); msg('Imagem gerada!',true); }); }catch(e){ msg('Não foi possível gerar a imagem neste navegador.',false); } }
+
+  /* ===== LARGADA VISUAL ===== */
+  function showCD(t){ const cd=document.getElementById('cd'),n=document.getElementById('cd-num'); cd.style.display='flex'; n.textContent=t; n.style.color=t==='VAI!'?'var(--go)':'var(--fire)'; n.style.animation='none'; void n.offsetWidth; n.style.animation='pop .5s ease'; }
+  function hideCD(){ document.getElementById('cd').style.display='none'; }
+
+  /* ===== FESTA ===== */
+  function celebration(){
+    const cv=document.getElementById('confetti'), ctx=cv.getContext('2d'); cv.style.display='block'; cv.width=window.innerWidth; cv.height=window.innerHeight;
+    const cols=['#534AB7','#D85A30','#1D9E75','#D4537E','#BA7517','#185FA5','#E24B4A','#FAC775']; const parts=[];
+    for(let i=0;i<150;i++) parts.push({fw:0,x:Math.random()*cv.width,y:-20-Math.random()*cv.height*.5,w:6+Math.random()*6,h:8+Math.random()*8,vx:(Math.random()-.5)*2,vy:2+Math.random()*4,rot:Math.random()*6.28,vr:(Math.random()-.5)*.3,c:cols[(Math.random()*cols.length)|0]});
+    function firework(x,y){ const c=cols[(Math.random()*cols.length)|0]; for(let i=0;i<36;i++){ const a=i/36*6.28,sp=2+Math.random()*3; parts.push({fw:1,x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,c}); } pop(); }
+    const t0=performance.now(); let lastFw=0;
+    const draw=now=>{ const t=now-t0; ctx.clearRect(0,0,cv.width,cv.height); if(t-lastFw>650&&t<3200){ lastFw=t; firework(Math.random()*cv.width,cv.height*.2+Math.random()*cv.height*.3); }
+      for(let k=parts.length-1;k>=0;k--){ const p=parts[k]; if(p.fw){ p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=.012; if(p.life<=0){ parts.splice(k,1); continue; } ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,6.28); ctx.fill(); } else { p.x+=p.vx; p.y+=p.vy; p.vy+=.04; p.rot+=p.vr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=Math.max(0,1-t/4500); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore(); } }
+      if(t<4600) requestAnimationFrame(draw); else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display='none'; } };
+    requestAnimationFrame(draw);
+  }
+
+  renderLista(); renderTeamChips();
+</script>
+</body>
+</html>
