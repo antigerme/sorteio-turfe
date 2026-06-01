@@ -355,11 +355,14 @@ App.Config = {
   timing: {
     cd3:1600, cd2:2250, cd1:2900, go:3550, hideCd:4250, // largada (contagem)
     galopeReta:150, galopeFlat:280, heartMs:640,         // ritmo do galope / batimento
-    narrMinGap:1400, narrLoopMin:2800, narrLoopRand:1800,// cadência da narração
+    narrMinGap:1700, narrLoopMin:2800, narrLoopRand:1800,// cadência da narração (1700 = tempo mín. na tela p/ dar tempo de ler)
     endDelay:1500, photoHold:3000, revealDelay:2600, revealCelebStop:4200, heatStopDelay:1200
   },
   // Volume da torcida por fase (ganho do ruído de multidão)
   crowd: { idle:.02, start:.045, reta:.06, end:.08, photo:.07, revealLow:.04, revealHigh:.1, zero:0 },
+  // Narração por voz (Web Speech API). rate/pitch ~1.0 = natural; >1 acelera/agudiza.
+  // Mantido próximo do natural para ficar fácil de entender (inclusive crianças).
+  voice: { rate:1.0, pitch:1.05, ratePrio:1.08, pitchPrio:1.08, volume:.95 },
   // Photo finish (canvas)
   photo: {
     W:640, H:300, depth:3, finishX:.72, leftX:.05, maxShow:4,
@@ -541,7 +544,8 @@ App.Audio = (function(){
     try {
       if (prio) speechSynthesis.cancel();
       else if (speechSynthesis.speaking || speechSynthesis.pending) return;
-      const u = new SpeechSynthesisUtterance(t); u.lang='pt-BR'; u.rate=prio?1.45:1.32; u.pitch=prio?1.45:1.25; u.volume=.9;
+      const V = CFG.voice;
+      const u = new SpeechSynthesisUtterance(t); u.lang='pt-BR'; u.rate = prio?V.ratePrio:V.rate; u.pitch = prio?V.pitchPrio:V.pitch; u.volume = V.volume;
       const vs = speechSynthesis.getVoices();
       const v = vs.find(x=>/pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name)) || vs.find(x=>/^pt/i.test(x.lang));
       if (v) u.voice = v;
@@ -814,6 +818,10 @@ App.Narration = (function(){
   const rnd = U.rndPick;
   // Exibe um texto na faixa de narração (com fade) e fala (voz). spk: texto alt. p/ voz.
   function narrar(t, fire, prio, spk){
+    // Ritmo legível: descarta falas NÃO prioritárias que chegam cedo demais —
+    // colapsa rajadas de eventos (ex.: 6 "X pega a lama" em <2s) numa só, pra o
+    // texto não "piscar". Frases prioritárias (largada, reta, vencedor) sempre passam.
+    if (!prio && !canNarr()) { Log.debug('Narration','fala descartada (muito próxima da anterior)', { t }); return; }
     const el = D.id('narr'); S.lastNarr = performance.now();
     el.classList.toggle('fire', !!fire); el.style.opacity = '0';
     setTimeout(() => { el.textContent = t; el.style.opacity = '1'; }, 170);
