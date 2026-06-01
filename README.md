@@ -27,6 +27,25 @@ Em toda reunião no **Teams / Google Meet** alguém precisa sortear alguém — 
 
 ---
 
+## 📦 Você só precisa de **um arquivo**: [`index.html`](index.html)
+
+O aplicativo **inteiro** é o **`index.html`** — e só ele. Baixe esse arquivo, abra no navegador e funciona. Não precisa clonar o repositório, nem instalar nada, nem dos outros arquivos.
+
+Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser ignorado:
+
+| Arquivo / pasta | Para que serve | Precisa para rodar? |
+|---|---|---|
+| **`index.html`** | **O app completo — HTML + CSS + JavaScript juntos** | ✅ **Sim — é só este** |
+| `README.md` | Esta página de apresentação | ❌ Não |
+| `docs/` | Imagens usadas no README | ❌ Não |
+| `CLAUDE.md` | Notas de arquitetura (para quem for editar o código) | ❌ Não |
+
+> 💡 **Fez `git clone`?** Pode apagar tudo, **menos o `index.html`** — ele continua funcionando exatamente igual. Melhor ainda: nem clone — **baixe só o `index.html`** (botão **Raw** / "Download raw file" na página do arquivo) e abra no navegador.
+>
+> *(A única coisa que vem "de fora" é a biblioteca jsPDF, carregada da internet apenas no momento de exportar um PDF. O sorteio em si roda 100% offline.)*
+
+---
+
 ## 🎬 Veja em ação
 
 **1. Cole os participantes, escolha o modo e o prêmio**
