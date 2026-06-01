@@ -6,7 +6,7 @@
 
 <sub><i>A live, horse-race style raffle for meetings. Paste names, share your screen, and let the crowd cheer.</i></sub>
 
-![Corrida única](docs/corrida.png)
+![Corrida ao vivo](docs/corrida.gif)
 
 ![1 arquivo HTML](https://img.shields.io/badge/1%20arquivo-HTML-E34F26?logo=html5&logoColor=white)
 ![Vanilla JS](https://img.shields.io/badge/JavaScript-vanilla-F7DF1E?logo=javascript&logoColor=black)
@@ -52,7 +52,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 
 ![Tela de cadastro](docs/cadastro.png)
 
-**2. A corrida acontece ao vivo, com narração e torcida** *(imagem no topo)* — e nas chegadas apertadas, entra o **📸 Photo Finish**:
+**2. A corrida acontece ao vivo, com narração e torcida** *(veja o GIF animado no topo ⬆️)* — e nas chegadas apertadas, entra o **📸 Photo Finish**:
 
 ![Photo finish](docs/photo-finish.png)
 
