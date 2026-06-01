@@ -89,6 +89,9 @@
   #shutterFlash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
   #shutterFlash.go { animation:shutterPop .5s ease forwards; }
   @keyframes shutterPop { 0%{opacity:.95;} 100%{opacity:0;} }
+  #replayTag { display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:52; background:rgba(44,44,42,.92); color:#fff; font-size:12px; font-weight:700; letter-spacing:1px; padding:7px 14px; border-radius:20px; }
+  #replayTag.on { display:inline-flex; align-items:center; gap:7px; animation:pop .4s ease; }
+  #replayTag i { width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block; animation:blink 1s steps(1) infinite; }
 
   #screen-heat { text-align:center; }
   #heatTitle { font-size:19px; font-weight:600; margin-bottom:14px; }
@@ -257,6 +260,7 @@
 </div>
 
 <div id="cd"><div id="cd-num"></div></div>
+<div id="replayTag"><i></i><span>REPLAY · CÂMERA LENTA</span></div>
 <div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
 <canvas id="confetti" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -389,7 +393,7 @@
 
   /* ===== CONTROLE ===== */
   function chosenSeed(forceRandom){ const v=document.getElementById('seedInp').value.trim(); if(!forceRandom&&v&&/^\d+$/.test(v)) return parseInt(v,10)>>>0; return (Math.random()*4294967296)>>>0; }
-  function clearAll(){ gen++; if(raf)cancelAnimationFrame(raf); if(celebRaf)cancelAnimationFrame(celebRaf); clearTimeout(narrTimer); clearSeq(); stopHeart(); crowdStop(); hideCD(); const fl=document.getElementById('flash'); if(fl) fl.style.display='none'; if('speechSynthesis'in window) speechSynthesis.cancel(); ended=false; }
+  function clearAll(){ gen++; if(raf)cancelAnimationFrame(raf); if(celebRaf)cancelAnimationFrame(celebRaf); clearTimeout(narrTimer); clearSeq(); stopHeart(); crowdStop(); hideCD(); const fl=document.getElementById('flash'); if(fl) fl.style.display='none'; const rt=document.getElementById('replayTag'); if(rt) rt.className=''; if('speechSynthesis'in window) speechSynthesis.cancel(); ended=false; }
   function setHeader(t,fire){ const h=document.getElementById('titulo'); h.textContent=t; h.classList.toggle('fire',!!fire); }
 
   function iniciar(){ if(mode==='tournament'){ startTournament(chosenSeed(false)); } else { lastSeed=chosenSeed(false); runRace(participantes, lastSeed, mode==='teams'?'👥 Corrida por equipes':''); } }
@@ -451,13 +455,44 @@
   }
   function endRace(){
     if(ended)return; ended=true; if(raf)cancelAnimationFrame(raf); clearTimeout(narrTimer); stopHeart();
-    const fin=sim.frames[sim.totalSteps-1]; for(let i=0;i<fin.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=fin[i].toFixed(2)+'%'; }
-    sim.order.forEach((idx,rank)=>{ const b=document.getElementById('bdg-'+idx); if(b){ b.textContent=rank+1; b.style.background=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
-    sim.order.slice(0,3).forEach(i=>{ const r=document.getElementById('raia-'+i); if(r) r.style.background='rgba(29,158,117,.16)'; });
     setHeader('Corrida encerrada!',false);
     const v=cavalos[sim.order[0]];
-    if(sim.close){ photoFinish(()=>afterRace()); }
-    else { narrar(rnd(N_FIM)(v.nome),true,true); crowdSet(.08); seq(1500,()=>afterRace()); }
+    const settle=()=>{
+      const fin=sim.frames[sim.totalSteps-1]; for(let i=0;i<fin.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=fin[i].toFixed(2)+'%'; }
+      sim.order.forEach((idx,rank)=>{ const b=document.getElementById('bdg-'+idx); if(b){ b.textContent=rank+1; b.style.background=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
+      sim.order.slice(0,3).forEach(i=>{ const r=document.getElementById('raia-'+i); if(r) r.style.background='rgba(29,158,117,.16)'; });
+    };
+    const finishUp=()=>{
+      settle(); setHeader('Corrida encerrada!',false);
+      if(sim.close){ photoFinish(()=>afterRace()); }
+      else { narrar(rnd(N_FIM)(v.nome),true,true); crowdSet(.08); seq(1500,()=>afterRace()); }
+    };
+    if(shouldReplay()) replayFinish(finishUp); else finishUp();
+  }
+  function shouldReplay(){ if(!sim||!sim.frames||sim.frames.length<6) return false; if(sim.close) return true; if(mode==='tournament') return !!(tour&&tour.isFinal); return true; }
+  function replayFinish(cb){
+    const STEP=sim.STEP, dur=sim.totalSteps*STEP, FIM=sim.FIM, winIdx=sim.order[0];
+    let pf=sim.frames.length-1; for(let f=0;f<sim.frames.length;f++){ if(sim.frames[f][winIdx]>=FIM-1e-6){ pf=f; break; } }
+    const startT=Math.max(0,(pf-40)*STEP), endT=Math.min(dur,(pf+4)*STEP), span=Math.max(STEP,endT-startT), real=span/0.5;
+    const tag=document.getElementById('replayTag'); if(tag) tag.className='on';
+    document.getElementById('pista').classList.add('reta');
+    setHeader('🎬 Câmera lenta — a chegada',true);
+    narrar('Vamos rever a chegada, em câmera lenta...',false,true,'Replay da chegada');
+    crowdSet(.05);
+    const apply=t=>{ const pos=frameAt(t); for(let i=0;i<pos.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=pos[i].toFixed(2)+'%'; } updateRanks(pos); };
+    apply(startT);
+    const myGen=gen; let t0=null, lastG=0;
+    const loop=now=>{
+      if(gen!==myGen) return;
+      if(t0===null) t0=now;
+      let p=(now-t0)/real; if(p>1) p=1;
+      const e=1-(1-p)*(1-p);
+      apply(startT+span*e);
+      if(now-lastG>240){ galope(false); lastG=now; }
+      if(p<1) raf=requestAnimationFrame(loop);
+      else { if(tag) tag.className=''; cb(); }
+    };
+    raf=requestAnimationFrame(loop);
   }
   function photoMarginWord(gap){ const g=Math.abs(gap); if(g<0.18) return 'um focinho'; if(g<0.5) return 'uma cabeça'; if(g<1.1) return 'meio pescoço'; if(g<2) return 'um pescoço'; return 'um corpo'; }
   function drawPhotoFinish(){
