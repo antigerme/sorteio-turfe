@@ -116,6 +116,8 @@ por causa das políticas de autoplay dos navegadores. Não há lint/test/build.
 - `Config.sim` — parâmetros da simulação (FIM, STEP, probabilidades, multiplicadores…).
   **Mexer aqui muda o resultado da corrida; revalide o determinismo.**
 - `Config.timing`, `Config.crowd`, `Config.photo` — tempos, volumes da torcida e a foto.
+  - `Config.timing.narrMinGap` — tempo mínimo (ms) que cada fala fica na tela (ritmo legível).
+- `Config.voice` — narração por voz (`rate`/`pitch` ~1.0 = natural, fácil de entender).
 - `Config.log.level` — verbosidade do logger.
 
 ## Convenções ao editar
