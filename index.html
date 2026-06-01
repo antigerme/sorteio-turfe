@@ -361,8 +361,9 @@ App.Config = {
   // Volume da torcida por fase (ganho do ruído de multidão)
   crowd: { idle:.02, start:.045, reta:.06, end:.08, photo:.07, revealLow:.04, revealHigh:.1, zero:0 },
   // Narração por voz (Web Speech API). rate/pitch ~1.0 = natural; >1 acelera/agudiza.
-  // Mantido próximo do natural para ficar fácil de entender (inclusive crianças).
-  voice: { rate:1.0, pitch:1.05, ratePrio:1.08, pitchPrio:1.08, volume:.95 },
+  // Levemente animada, mas ainda fácil de entender (longe do 1.45 que confundia).
+  // A energia vem mais da VELOCIDADE (rate) que do TOM (pitch, mais sensível p/ clareza).
+  voice: { rate:1.1, pitch:1.08, ratePrio:1.2, pitchPrio:1.1, volume:.95 },
   // Photo finish (canvas)
   photo: {
     W:640, H:300, depth:3, finishX:.72, leftX:.05, maxShow:4,
