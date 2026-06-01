@@ -80,8 +80,18 @@
   #cd { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; pointer-events:none; }
   #cd-num { font-size:130px; font-weight:700; line-height:1; text-shadow:0 3px 24px rgba(0,0,0,.18); }
   @keyframes pop { 0%{transform:scale(.3);opacity:0;} 40%{transform:scale(1.18);opacity:1;} 100%{transform:scale(1);opacity:1;} }
-  #flash { display:none; position:fixed; inset:0; z-index:55; background:rgba(245,244,239,.92); align-items:center; justify-content:center; flex-direction:column; gap:10px; }
-  #flash .pf { font-size:48px; font-weight:700; color:var(--fire); animation:pop .5s ease; } #flash .pf2 { font-size:16px; color:var(--ts); }
+  #flash { display:none; position:fixed; inset:0; z-index:55; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  .photo-card { position:relative; background:#fff; border:1px solid #d9d6cc; border-radius:6px; padding:11px 11px 9px; box-shadow:0 18px 60px rgba(0,0,0,.5); transform:rotate(-1.1deg); animation:photoIn .42s cubic-bezier(.2,.9,.3,1.25); max-width:min(680px,94vw); width:100%; }
+  @keyframes photoIn { from{opacity:0; transform:rotate(-1.1deg) scale(.7);} to{opacity:1; transform:rotate(-1.1deg) scale(1);} }
+  .photo-card .photo-cap { font-size:13px; font-weight:700; letter-spacing:1.5px; color:var(--fire); text-align:center; margin-bottom:8px; }
+  .photo-card canvas { display:block; width:100%; height:auto; border-radius:3px; background:#ecd9bd; }
+  .photo-card .photo-sub { font-size:13px; color:var(--ts); text-align:center; margin-top:8px; font-style:italic; }
+  #shutterFlash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+  #shutterFlash.go { animation:shutterPop .5s ease forwards; }
+  @keyframes shutterPop { 0%{opacity:.95;} 100%{opacity:0;} }
+  #replayTag { display:none; position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:52; background:rgba(44,44,42,.92); color:#fff; font-size:12px; font-weight:700; letter-spacing:1px; padding:7px 14px; border-radius:20px; }
+  #replayTag.on { display:inline-flex; align-items:center; gap:7px; animation:pop .4s ease; }
+  #replayTag i { width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block; animation:blink 1s steps(1) infinite; }
 
   #screen-heat { text-align:center; }
   #heatTitle { font-size:19px; font-weight:600; margin-bottom:14px; }
@@ -250,7 +260,8 @@
 </div>
 
 <div id="cd"><div id="cd-num"></div></div>
-<div id="flash"><div class="pf">📸 PHOTO FINISH!</div><div class="pf2">Chegada apertadíssima...</div></div>
+<div id="replayTag"><i></i><span>REPLAY · CÂMERA LENTA</span></div>
+<div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
 <canvas id="confetti" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -382,7 +393,7 @@
 
   /* ===== CONTROLE ===== */
   function chosenSeed(forceRandom){ const v=document.getElementById('seedInp').value.trim(); if(!forceRandom&&v&&/^\d+$/.test(v)) return parseInt(v,10)>>>0; return (Math.random()*4294967296)>>>0; }
-  function clearAll(){ gen++; if(raf)cancelAnimationFrame(raf); if(celebRaf)cancelAnimationFrame(celebRaf); clearTimeout(narrTimer); clearSeq(); stopHeart(); crowdStop(); hideCD(); const fl=document.getElementById('flash'); if(fl) fl.style.display='none'; if('speechSynthesis'in window) speechSynthesis.cancel(); ended=false; }
+  function clearAll(){ gen++; if(raf)cancelAnimationFrame(raf); if(celebRaf)cancelAnimationFrame(celebRaf); clearTimeout(narrTimer); clearSeq(); stopHeart(); crowdStop(); hideCD(); const fl=document.getElementById('flash'); if(fl) fl.style.display='none'; const rt=document.getElementById('replayTag'); if(rt) rt.className=''; if('speechSynthesis'in window) speechSynthesis.cancel(); ended=false; }
   function setHeader(t,fire){ const h=document.getElementById('titulo'); h.textContent=t; h.classList.toggle('fire',!!fire); }
 
   function iniciar(){ if(mode==='tournament'){ startTournament(chosenSeed(false)); } else { lastSeed=chosenSeed(false); runRace(participantes, lastSeed, mode==='teams'?'👥 Corrida por equipes':''); } }
@@ -444,15 +455,86 @@
   }
   function endRace(){
     if(ended)return; ended=true; if(raf)cancelAnimationFrame(raf); clearTimeout(narrTimer); stopHeart();
-    const fin=sim.frames[sim.totalSteps-1]; for(let i=0;i<fin.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=fin[i].toFixed(2)+'%'; }
-    sim.order.forEach((idx,rank)=>{ const b=document.getElementById('bdg-'+idx); if(b){ b.textContent=rank+1; b.style.background=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
-    sim.order.slice(0,3).forEach(i=>{ const r=document.getElementById('raia-'+i); if(r) r.style.background='rgba(29,158,117,.16)'; });
     setHeader('Corrida encerrada!',false);
     const v=cavalos[sim.order[0]];
-    if(sim.close){ photoFinish(()=>afterRace()); }
-    else { narrar(rnd(N_FIM)(v.nome),true,true); crowdSet(.08); seq(1500,()=>afterRace()); }
+    const settle=()=>{
+      const fin=sim.frames[sim.totalSteps-1]; for(let i=0;i<fin.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=fin[i].toFixed(2)+'%'; }
+      sim.order.forEach((idx,rank)=>{ const b=document.getElementById('bdg-'+idx); if(b){ b.textContent=rank+1; b.style.background=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
+      sim.order.slice(0,3).forEach(i=>{ const r=document.getElementById('raia-'+i); if(r) r.style.background='rgba(29,158,117,.16)'; });
+    };
+    const finishUp=()=>{
+      settle(); setHeader('Corrida encerrada!',false);
+      if(sim.close){ photoFinish(()=>afterRace()); }
+      else { narrar(rnd(N_FIM)(v.nome),true,true); crowdSet(.08); seq(1500,()=>afterRace()); }
+    };
+    if(shouldReplay()) replayFinish(finishUp); else finishUp();
   }
-  function photoFinish(cb){ const o=document.getElementById('flash'); o.style.display='flex'; shutter(); narrar('PHOTO FINISH! Chegada apertadíssima!',true,true,'Chegada apertadíssima!'); crowdSet(.07); seq(1900,()=>{ o.style.display='none'; cb(); }); }
+  function shouldReplay(){ if(!sim||!sim.frames||sim.frames.length<6) return false; if(sim.close) return true; if(mode==='tournament') return !!(tour&&tour.isFinal); return true; }
+  function replayFinish(cb){
+    const STEP=sim.STEP, dur=sim.totalSteps*STEP, FIM=sim.FIM, winIdx=sim.order[0];
+    let pf=sim.frames.length-1; for(let f=0;f<sim.frames.length;f++){ if(sim.frames[f][winIdx]>=FIM-1e-6){ pf=f; break; } }
+    const startT=Math.max(0,(pf-40)*STEP), endT=Math.min(dur,(pf+4)*STEP), span=Math.max(STEP,endT-startT), real=span/0.5;
+    const tag=document.getElementById('replayTag'); if(tag) tag.className='on';
+    document.getElementById('pista').classList.add('reta');
+    setHeader('🎬 Câmera lenta — a chegada',true);
+    narrar('Vamos rever a chegada, em câmera lenta...',false,true,'Replay da chegada');
+    crowdSet(.05);
+    const apply=t=>{ const pos=frameAt(t); for(let i=0;i<pos.length;i++){ const el=document.getElementById('cav-'+i); if(el) el.style.left=pos[i].toFixed(2)+'%'; } updateRanks(pos); };
+    apply(startT);
+    const myGen=gen; let t0=null, lastG=0;
+    const loop=now=>{
+      if(gen!==myGen) return;
+      if(t0===null) t0=now;
+      let p=(now-t0)/real; if(p>1) p=1;
+      const e=1-(1-p)*(1-p);
+      apply(startT+span*e);
+      if(now-lastG>240){ galope(false); lastG=now; }
+      if(p<1) raf=requestAnimationFrame(loop);
+      else { if(tag) tag.className=''; cb(); }
+    };
+    raf=requestAnimationFrame(loop);
+  }
+  function photoMarginWord(gap){ const g=Math.abs(gap); if(g<0.18) return 'um focinho'; if(g<0.5) return 'uma cabeça'; if(g<1.1) return 'meio pescoço'; if(g<2) return 'um pescoço'; return 'um corpo'; }
+  function drawPhotoFinish(){
+    const cv=document.getElementById('photoCanvas'), fb={winner:cavalos[sim.order[0]].nome,marginWord:'pouco'};
+    if(!cv||!sim||!sim.frames||!sim.frames.length) return fb;
+    const DPR=Math.min(2,window.devicePixelRatio||1), W=640, H=300, ctx=cv.getContext('2d'); if(!ctx) return fb;
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    const FIM=sim.FIM, winIdx=sim.order[0];
+    let pf=sim.frames.length-1; for(let f=0;f<sim.frames.length;f++){ if(sim.frames[f][winIdx]>=FIM-1e-6){ pf=f; break; } }
+    const pos=sim.frames[pf], DEPTH=3, lo=FIM-DEPTH, finishX=W*.72, leftX=W*.05;
+    const mapX=p=>leftX+Math.max(0,Math.min(1.04,(p-lo)/(FIM-lo)))*(finishX-leftX);
+    const show=[sim.order[0],sim.order[1]]; for(let k=2;k<Math.min(4,sim.order.length);k++){ if(pos[sim.order[k]]>=lo) show.push(sim.order[k]); }
+    const n=show.length, top=24, bot=H-38, laneH=(bot-top)/n;
+    ctx.fillStyle='#ecd9bd'; ctx.fillRect(0,0,W,H); ctx.fillStyle='#cdb892'; ctx.fillRect(0,0,W,14);
+    ctx.strokeStyle='rgba(0,0,0,.045)'; ctx.lineWidth=1; for(let gx=-20;gx<W;gx+=26){ ctx.beginPath(); ctx.moveTo(gx,16); ctx.lineTo(gx-16,H-30); ctx.stroke(); }
+    for(let yy=top; yy<bot; yy+=8){ ctx.fillStyle=Math.floor((yy-top)/8)%2?'#2c2c2a':'#fff'; ctx.fillRect(finishX,yy,8,8); }
+    ctx.fillStyle='rgba(44,44,42,.85)'; ctx.fillRect(finishX-1.5,top,1.5,bot-top);
+    show.forEach((idx,rank)=>{
+      const c=cavalos[idx], cy=top+laneH*(rank+.5), hx=mapX(pos[idx]), hsz=Math.min(40,laneH*.82);
+      if(rank>0){ ctx.strokeStyle='rgba(0,0,0,.08)'; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(0,top+laneH*rank); ctx.lineTo(W,top+laneH*rank); ctx.stroke(); ctx.setLineDash([]); }
+      for(let b=3;b>=1;b--){ ctx.globalAlpha=.09/b; ctx.save(); ctx.translate(hx-b*8,cy); ctx.scale(-1,1); ctx.font=hsz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.emoji,0,0); ctx.restore(); }
+      ctx.globalAlpha=1; ctx.save(); ctx.translate(hx,cy); ctx.scale(-1,1); ctx.font=hsz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.emoji,0,0); ctx.restore();
+      if(rank===0){ ctx.strokeStyle='#BA7517'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(hx,cy,hsz*.6,0,6.28); ctx.stroke(); }
+      const bx=leftX+2; ctx.fillStyle=rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; ctx.beginPath(); ctx.arc(bx+9,cy,9,0,6.28); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(rank+1),bx+9,cy+.5);
+      let nm=c.nome; if(nm.length>16) nm=nm.slice(0,15)+'…'; ctx.textAlign='left'; ctx.fillStyle='#2c2c2a'; ctx.font='bold 13px sans-serif'; ctx.fillText(nm,bx+24,cy+.5);
+    });
+    const marginWord=photoMarginWord(pos[sim.order[0]]-pos[sim.order[1]]);
+    ctx.fillStyle='rgba(44,44,42,.92)'; ctx.fillRect(0,H-28,W,28);
+    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 14px sans-serif';
+    ctx.fillText('🏁 '+cavalos[winIdx].nome+' vence por '+marginWord+'!',W/2,H-14);
+    return {winner:cavalos[winIdx].nome, marginWord};
+  }
+  function photoFinish(cb){
+    const o=document.getElementById('flash'), info=drawPhotoFinish();
+    const sub=document.getElementById('photoSub'); if(sub) sub.textContent='Vitória por '+info.marginWord+' — confirmada na foto';
+    o.style.display='flex';
+    const sf=document.getElementById('shutterFlash'); if(sf){ sf.classList.remove('go'); void sf.offsetWidth; sf.classList.add('go'); }
+    shutter();
+    narrar('PHOTO FINISH! '+info.winner+' leva por '+info.marginWord+'!',true,true,'Photo finish! '+info.winner+' por '+info.marginWord);
+    crowdSet(.07); seq(3000,()=>{ o.style.display='none'; cb(); });
+  }
 
   function afterRace(){
     if(mode==='tournament'){
