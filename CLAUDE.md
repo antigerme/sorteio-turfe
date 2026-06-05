@@ -108,6 +108,13 @@ por causa das políticas de autoplay dos navegadores. Não há lint/test/build.
 - **`data-action`**: a tabela `ACTIONS` em `App.UI` mapeia a ação ao módulo. Botão novo =
   `data-action="x"` no HTML + entrada em `ACTIONS`. Um único listener cuida de tudo
   (som do clique, fechar menus ao clicar fora, despachar a ação).
+- **Link/URL compartilhável**: `App.Result.copyLink`/`buildShareUrl` geram um link que reproduz
+  o sorteio (modo + participantes + semente). Os dados vão no **fragmento `#`** (que NÃO trafega
+  no GET — sem limite de servidor) e **comprimidos** (`#d=<base64url(deflate-raw)>`, via
+  `CompressionStream`; helpers em `App.Util`) — encurta muito p/ listas grandes (ex.: 100 nomes
+  ~3 KB → centenas de bytes). No boot, `App.UI.applyUrlParams` (async) descomprime e
+  **pré-preenche** o cadastro (sem auto-iniciar), com fallback p/ fragmento cru `#…` e p/
+  `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `seed`).
 
 ## Parâmetros (tudo em `App.Config`)
 
