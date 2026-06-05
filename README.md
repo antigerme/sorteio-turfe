@@ -75,6 +75,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - 📣 **Narração ao vivo** + **sons sintetizados** (clarim, tiro de largada, galope, torcida, sino, fanfarra) e **narração por voz** opcional (pt-BR).
 - 📸 **Photo finish** — nas chegadas apertadas, congela e mostra a foto da linha de chegada com a margem da vitória ("por um focinho", "por uma cabeça"…).
 - ⚖️ **Sorteio justo e reproduzível** — resultado 100% determinístico por **semente**: a mesma semente reproduz exatamente o mesmo sorteio (transparência total).
+- 🔗 **Link compartilhável** — no resultado, **"Copiar link"** gera uma URL que **reproduz o sorteio inteiro** (modo + participantes + semente) ao abrir; o apresentador só confere e clica em Iniciar.
 - 🏆 **Pódio, estatísticas e classificação completa** (viradas de liderança, ultrapassagens, arrancadas).
 - 💾 **Exportar** o resultado em **PDF**, **certificado de vitória (PDF)** ou **imagem (PNG)**.
 - 👥 **Até 100 participantes**, com **colar lista** (um nome por linha; "Nome, Equipe" no modo equipes).
@@ -93,7 +94,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 3. No menu **🔊 Som** (canto superior direito), ligue a **🗣️ Narração** por voz se quiser o locutor.
 4. **Compartilhe a tela** na reunião, clique em **Iniciar** e deixe a galera torcer! 🏁
 
-> 💡 **Dica de "sorteio justo":** em *Opções avançadas* você pode informar uma **semente**. Anuncie-a antes da corrida (ou peça um número para a plateia) — qualquer pessoa pode reproduzir o mesmo resultado depois. Prova de que não há truque.
+> 💡 **Dica de "sorteio justo":** em *Opções avançadas* você pode informar uma **semente**. Anuncie-a antes da corrida (ou peça um número para a plateia) — qualquer pessoa pode reproduzir o mesmo resultado depois. Prova de que não há truque. E na tela de resultado, **"🔗 Copiar link"** gera uma URL que já reabre o sorteio prontinho — é só compartilhar.
 
 ---
 

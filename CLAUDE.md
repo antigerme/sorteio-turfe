@@ -108,6 +108,10 @@ por causa das políticas de autoplay dos navegadores. Não há lint/test/build.
 - **`data-action`**: a tabela `ACTIONS` em `App.UI` mapeia a ação ao módulo. Botão novo =
   `data-action="x"` no HTML + entrada em `ACTIONS`. Um único listener cuida de tudo
   (som do clique, fechar menus ao clicar fora, despachar a ação).
+- **Link/URL compartilhável**: no boot, `App.UI.applyUrlParams` lê a querystring e
+  **pré-preenche** o sorteio (sem auto-iniciar): `?modo=`, `?seed=` (ou `?semente=`) e os
+  participantes em parâmetros repetidos `?n=`/`?t=` (lidos com `URLSearchParams.getAll`,
+  mesmo padrão do `?log=`). `App.Result.copyLink`/`buildShareUrl` geram essa URL no resultado.
 
 ## Parâmetros (tudo em `App.Config`)
 

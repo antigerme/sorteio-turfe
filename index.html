@@ -204,7 +204,7 @@
     <label class="fld">🏆 Prêmio em disputa (opcional)</label>
     <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%">
 
-    <details>
+    <details id="advOpts">
       <summary>Opções avançadas — sorteio justo</summary>
       <label class="fld">Semente (opcional)</label>
       <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%">
@@ -1153,14 +1153,25 @@ App.Result = (function(){
     D.setHTML('stats', `<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>${S.sim.close?'<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>':''}`);
     D.setHTML('full', '<div class="ft">' + (isTour ? 'Classificação da final' : 'Classificação completa') + '</div>' + S.sim.order.map((idx,p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join(''));
     const seedShown = isTour ? S.tourBaseSeed : S.sim.seed;
-    D.setHTML('seedline', `Semente: <code>${seedShown}</code> <button class="btn btn-sm" data-action="copiarSemente" data-arg="${seedShown}">Copiar</button> <span class="hint">— reproduza em "Opções avançadas"</span>`);
+    D.setHTML('seedline', `Semente: <code>${seedShown}</code> <button class="btn btn-sm" data-action="copiarSemente" data-arg="${seedShown}">Copiar</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <span class="hint">— reproduza pela URL ou em "Opções avançadas"</span>`);
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
   // Copia a semente para a área de transferência.
   function copySeed(s){ try { navigator.clipboard.writeText('' + s); App.Roster.msg('Semente copiada!', true); Log.info('Result','semente copiada', { seed:s }); } catch (e) { App.Roster.msg('Semente: ' + s, true); Log.warn('Result','clipboard indisponível', e); } }
   function toggleSave(e){ if (e) e.stopPropagation(); D.id('saveMenu').classList.toggle('open'); }
   function closeSave(){ const m = D.id('saveMenu'); if (m) m.classList.remove('open'); }
-  return { reveal, build, copySeed, toggleSave, closeSave };
+  // Monta uma URL que reproduz este sorteio (modo + participantes + semente).
+  // Params repetidos n/t (URLSearchParams) — robustos a vírgula/acento/espaço nos nomes.
+  function buildShareUrl(seed){
+    const base = location.href.split(/[?#]/)[0];
+    const p = new URLSearchParams();
+    p.set('modo', S.mode); p.set('seed', seed);
+    S.participantes.forEach(n => { p.append('n', n); if (S.mode === 'teams') p.append('t', S.teamOf[n] || ''); });
+    return base + '?' + p.toString();
+  }
+  // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar).
+  function copyLink(seed){ const url = buildShareUrl(seed); try { navigator.clipboard.writeText(url); App.Roster.msg('Link copiado!', true); Log.info('Result','link copiado', { len:url.length }); } catch (e) { App.Roster.msg('Link: ' + url, true); Log.warn('Result','clipboard indisponível', e); } }
+  return { reveal, build, copySeed, copyLink, toggleSave, closeSave };
 })();
 
 /* ===================== Export — PDF / certificado / imagem ===================== */
@@ -1249,6 +1260,7 @@ App.UI = (function(){
     continuarTorneio: () => App.Tournament.continuar(),
     // resultado / exportações
     copiarSemente:   (el) => App.Result.copySeed(el.dataset.arg),
+    copiarLink:      (el) => App.Result.copyLink(el.dataset.arg),
     toggleSalvar:    (el, e) => App.Result.toggleSave(e),
     imprimirRanking: () => { App.Export.pdfRanking(); App.Result.closeSave(); },
     certificado:     () => { App.Export.certificate(); App.Result.closeSave(); },
@@ -1268,6 +1280,34 @@ App.UI = (function(){
     try { fn(el, e); } catch (err) { Log.error('UI','erro ao executar ação ' + name, err); }
   }
 
+  // Pré-preenche o sorteio a partir da URL (?modo=&seed=&n=&t=). NÃO inicia —
+  // o apresentador confere e clica em Iniciar. Reusa Modes/Roster/Teams.
+  function applyUrlParams(){
+    try {
+      const p = new URLSearchParams(location.search);
+      let loaded = false;
+      const modo = p.get('modo');
+      if (modo && CFG.MODE_HINTS[modo]) { App.Modes.set(modo); loaded = true; }
+      const names = p.getAll('n'), teams = p.getAll('t');
+      if (names.length) {
+        if (S.mode === 'teams') {
+          names.forEach((nome, i) => {
+            const team = (teams[i] || '').trim();
+            if (team && !S.teams.some(t => t.toLowerCase() === team.toLowerCase())) { S.teams.push(team); App.Teams.color(team); }
+            App.Roster.addNames([nome], team || null);
+          });
+          App.Teams.renderChips(); App.Teams.buildSelect();
+        } else {
+          App.Roster.addNames(names, null);
+        }
+        loaded = true;
+      }
+      const seed = (p.get('seed') || p.get('semente') || '').trim();
+      if (/^\d+$/.test(seed)) { D.id('seedInp').value = seed.slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
+      if (loaded) { App.Roster.msg('Sorteio carregado do link — confira e clique em Iniciar ✓', true); Log.info('UI','sorteio carregado da URL', { modo:S.mode, participantes:S.participantes.length, seed }); }
+    } catch (e) { Log.warn('UI','falha ao ler parâmetros da URL', e); }
+  }
+
   function init(){
     // Enter nos campos de texto
     D.on(D.id('inp'), 'keydown', e => { if (e.key === 'Enter') App.Roster.addOne(); });
@@ -1278,6 +1318,8 @@ App.UI = (function(){
     if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
     // Render inicial
     App.Roster.render(); App.Teams.renderChips();
+    // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável)
+    applyUrlParams();
     Log.info('UI','interface pronta');
   }
   return { init, ACTIONS };
