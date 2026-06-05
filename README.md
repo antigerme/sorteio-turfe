@@ -76,6 +76,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - 📸 **Photo finish** — nas chegadas apertadas, congela e mostra a foto da linha de chegada com a margem da vitória ("por um focinho", "por uma cabeça"…).
 - ⚖️ **Sorteio justo e reproduzível** — resultado 100% determinístico por **semente**: a mesma semente reproduz exatamente o mesmo sorteio (transparência total).
 - 🔗 **Link compartilhável** — no resultado, **"Copiar link"** gera uma URL que **reproduz o sorteio inteiro** (modo + participantes + semente) ao abrir; o apresentador só confere e clica em Iniciar.
+- 📱 **QR Code do link** — gere um QR na tela de resultado pra galera **escanear e abrir o sorteio no celular**. Gerado 100% no navegador (sem lib, offline) — nenhum dado sai dali.
 - 🏆 **Pódio, estatísticas e classificação completa** (viradas de liderança, ultrapassagens, arrancadas).
 - 💾 **Exportar** o resultado em **PDF**, **certificado de vitória (PDF)** ou **imagem (PNG)**.
 - 👥 **Até 100 participantes**, com **colar lista** (um nome por linha; "Nome, Equipe" no modo equipes).

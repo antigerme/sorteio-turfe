@@ -106,6 +106,13 @@
   #shutterFlash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
   #shutterFlash.go { animation:shutterPop .5s ease forwards; }
   @keyframes shutterPop { 0%{opacity:.95;} 100%{opacity:0;} }
+  /* ===== MODAL DO QR CODE ===== */
+  #qrModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  #qrModal.open { display:flex; }
+  .qr-card { background:#fff; border-radius:14px; padding:18px 20px 16px; box-shadow:0 18px 60px rgba(0,0,0,.5); text-align:center; max-width:min(360px,92vw); animation:pop .35s ease; }
+  .qr-card .qr-cap { font-size:15px; font-weight:600; color:var(--tp); margin-bottom:12px; }
+  .qr-card canvas { display:block; margin:0 auto; image-rendering:pixelated; border-radius:6px; max-width:100%; height:auto; }
+  .qr-card .qr-sub { font-size:12px; color:var(--ts); margin:12px 0 14px; line-height:1.5; }
 
   /* ===== TELA DE BATERIA (torneio) ===== */
   #screen-heat { text-align:center; }
@@ -279,6 +286,7 @@
 <!-- Overlays globais (contagem, photo finish, confete) -->
 <div id="cd"><div id="cd-num"></div></div>
 <div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
+<div id="qrModal"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas"></canvas><div class="qr-sub" id="qrSub"></div><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div>
 <canvas id="confetti" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -1133,6 +1141,116 @@ App.Tournament = (function(){
   return { makeHeats, start, showHeatResult, continuar, bracketHtml };
 })();
 
+/* ===================== QR — gerador de QR Code (vanilla, sem dependências) ===================== */
+/* Implementação PRÓPRIA (byte mode, nível L) para o QR do link compartilhável.
+   Roda 100% no navegador — nenhum dado sai daqui. Validado contra as tabelas do
+   padrão ISO/IEC 18004 (format info, capacidades) e por round-trip. make()/draw(). */
+App.QR = (function(){
+  // GF(256), primitivo 0x11D
+  const EXP = new Array(512), LOG = new Array(256);
+  (() => { let x = 1; for (let i = 0; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11D; } for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255]; })();
+  const gmul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
+  function rsGen(deg) { let g = [1]; for (let i = 0; i < deg; i++) { const n = new Array(g.length + 1).fill(0); for (let j = 0; j < g.length; j++) { n[j] ^= g[j]; n[j + 1] ^= gmul(g[j], EXP[i]); } g = n; } return g; }
+  function rsEC(data, ecLen) { const g = rsGen(ecLen); const res = data.concat(new Array(ecLen).fill(0)); for (let i = 0; i < data.length; i++) { const c = res[i]; if (c) for (let j = 0; j < g.length; j++) res[i + j] ^= gmul(g[j], c); } return res.slice(data.length); }
+  // posições dos padrões de alinhamento; nível L: [ecPerBlock, numBlocks]
+  const ALIGN = [[],[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]];
+  const ECL = [null,[7,1],[10,1],[15,1],[20,1],[26,1],[18,2],[20,2],[24,2],[30,2],[18,4],[20,4],[24,4],[26,4],[30,4],[22,6],[24,6],[28,6],[30,6],[28,7],[28,8],[28,8],[28,9],[30,9],[30,10],[26,12],[28,12],[30,12],[30,13],[30,14],[30,15],[30,16],[30,17],[30,18],[30,19],[30,19],[30,20],[30,21],[30,22],[30,24],[30,25]];
+  const size = v => 17 + 4 * v;
+  function reservedMap(v) {
+    const n = size(v), R = Array.from({ length: n }, () => new Array(n).fill(false)), set = (r, c) => { if (r >= 0 && r < n && c >= 0 && c < n) R[r][c] = true; };
+    for (const [pr, pc] of [[0, 0], [0, n - 7], [n - 7, 0]]) for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) set(pr + r, pc + c);
+    for (let i = 0; i < n; i++) { set(6, i); set(i, 6); }
+    const a = ALIGN[v];
+    for (const r of a) for (const c of a) { if ((r <= 8 && c <= 8) || (r <= 8 && c >= n - 9) || (r >= n - 9 && c <= 8)) continue; for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) set(r + dr, c + dc); }
+    for (let i = 0; i < 9; i++) { set(8, i); set(i, 8); }
+    for (let i = 0; i < 8; i++) { set(8, n - 1 - i); set(n - 1 - i, 8); }
+    if (v >= 7) for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) { set(i, n - 11 + j); set(n - 11 + j, i); }
+    return R;
+  }
+  function totalCodewords(v) { const n = size(v), R = reservedMap(v); let free = 0; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (!R[r][c]) free++; return Math.floor(free / 8); }
+  function dataCwCount(v) { const [ec, nb] = ECL[v]; return totalCodewords(v) - ec * nb; }
+  function chooseVersion(len) { for (let v = 1; v <= 40; v++) { const cb = v <= 9 ? 8 : 16; if (dataCwCount(v) * 8 >= 4 + cb + 8 * len) return v; } return -1; }
+  function drawFunction(grid, v) {
+    const n = size(v);
+    for (const [pr, pc] of [[0, 0], [0, n - 7], [n - 7, 0]]) for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) { const rr = pr + r, cc = pc + c; if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue; const inF = r >= 0 && r <= 6 && c >= 0 && c <= 6; grid[rr][cc] = inF ? ((r === 0 || r === 6 || c === 0 || c === 6) || (r >= 2 && r <= 4 && c >= 2 && c <= 4)) : false; }
+    for (let i = 8; i < n - 8; i++) { grid[6][i] = (i % 2 === 0); grid[i][6] = (i % 2 === 0); }
+    const a = ALIGN[v];
+    for (const r of a) for (const c of a) { if ((r <= 8 && c <= 8) || (r <= 8 && c >= n - 9) || (r >= n - 9 && c <= 8)) continue; for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid[r + dr][c + dc] = Math.max(Math.abs(dr), Math.abs(dc)) !== 1; }
+  }
+  function fmtValue(mask) { const data = (1 << 3) | mask; let rem = data; for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >> 9) * 0x537); return ((data << 10) | rem) ^ 0x5412; }
+  function verValue(v) { let rem = v; for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >> 11) * 0x1F25); return (v << 12) | rem; }
+  const bit = (x, i) => (x >> i) & 1;
+  function drawFormat(grid, v, mask) {
+    const n = size(v), f = fmtValue(mask);
+    for (let i = 0; i <= 5; i++) grid[8][i] = !!bit(f, i);
+    grid[8][7] = !!bit(f, 6); grid[8][8] = !!bit(f, 7); grid[7][8] = !!bit(f, 8);
+    for (let i = 9; i < 15; i++) grid[14 - i][8] = !!bit(f, i);
+    for (let i = 0; i < 8; i++) grid[n - 1 - i][8] = !!bit(f, i);
+    for (let i = 8; i < 15; i++) grid[8][n - 15 + i] = !!bit(f, i);
+    grid[n - 8][8] = true;
+  }
+  function drawVersion(grid, v) { const n = size(v), vv = verValue(v); for (let i = 0; i < 18; i++) { const b = !!bit(vv, i), a = n - 11 + i % 3, d = Math.floor(i / 3); grid[d][a] = b; grid[a][d] = b; } }
+  function buildData(bytes, v) {
+    const dataCw = dataCwCount(v), cb = v <= 9 ? 8 : 16, bits = [], push = (val, n) => { for (let i = n - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+    push(0b0100, 4); push(bytes.length, cb); for (const b of bytes) push(b, 8);
+    const cap = dataCw * 8;
+    for (let i = 0; i < 4 && bits.length < cap; i++) bits.push(0);
+    while (bits.length % 8) bits.push(0);
+    const cws = []; for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; cws.push(b); }
+    const pad = [0xEC, 0x11]; let k = 0; while (cws.length < dataCw) cws.push(pad[k++ % 2]);
+    return cws;
+  }
+  function interleave(dataCw, v) {
+    const [ecLen, nb] = ECL[v], total = dataCw.length, short = Math.floor(total / nb), longCount = total % nb, shortCount = nb - longCount, blocks = [], ecs = []; let p = 0;
+    for (let i = 0; i < nb; i++) { const len = short + (i >= shortCount ? 1 : 0), blk = dataCw.slice(p, p + len); p += len; blocks.push(blk); ecs.push(rsEC(blk, ecLen)); }
+    const out = [], maxD = Math.max.apply(null, blocks.map(b => b.length));
+    for (let i = 0; i < maxD; i++) for (const b of blocks) if (i < b.length) out.push(b[i]);
+    for (let i = 0; i < ecLen; i++) for (const e of ecs) out.push(e[i]);
+    return out;
+  }
+  const MASKS = [(r, c) => (r + c) % 2 === 0, (r, c) => r % 2 === 0, (r, c) => c % 3 === 0, (r, c) => (r + c) % 3 === 0, (r, c) => (((r >> 1) + Math.floor(c / 3)) % 2) === 0, (r, c) => ((r * c) % 2 + (r * c) % 3) === 0, (r, c) => (((r * c) % 2 + (r * c) % 3) % 2) === 0, (r, c) => (((r + c) % 2 + (r * c) % 3) % 2) === 0];
+  function dataPositions(v) { const n = size(v), R = reservedMap(v), pos = []; let up = true; for (let col = n - 1; col > 0; col -= 2) { if (col === 6) col--; for (let i = 0; i < n; i++) { const row = up ? n - 1 - i : i; for (let cc = 0; cc < 2; cc++) { const c = col - cc; if (!R[row][c]) pos.push([row, c]); } } up = !up; } return pos; }
+  function penalty(g, n) {
+    let p = 0;
+    for (let r = 0; r < n; r++) { let run = 1; for (let c = 1; c < n; c++) { if (g[r][c] === g[r][c - 1]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
+    for (let c = 0; c < n; c++) { let run = 1; for (let r = 1; r < n; r++) { if (g[r][c] === g[r - 1][c]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
+    for (let r = 0; r < n - 1; r++) for (let c = 0; c < n - 1; c++) { const x = g[r][c]; if (x === g[r][c + 1] && x === g[r + 1][c] && x === g[r + 1][c + 1]) p += 3; }
+    const P1 = [true, false, true, true, true, false, true, false, false, false, false], P2 = [false, false, false, false, true, false, true, true, true, false, true];
+    for (let r = 0; r < n; r++) for (let c = 0; c <= n - 11; c++) { let a = true, b = true; for (let k = 0; k < 11; k++) { if (g[r][c + k] !== P1[k]) a = false; if (g[r][c + k] !== P2[k]) b = false; } if (a || b) p += 40; }
+    for (let c = 0; c < n; c++) for (let r = 0; r <= n - 11; r++) { let a = true, b = true; for (let k = 0; k < 11; k++) { if (g[r + k][c] !== P1[k]) a = false; if (g[r + k][c] !== P2[k]) b = false; } if (a || b) p += 40; }
+    let dark = 0; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (g[r][c]) dark++;
+    p += Math.floor(Math.abs(dark * 100 / (n * n) - 50) / 5) * 10;
+    return p;
+  }
+  // Gera a matriz do QR (true = módulo escuro). Lança se o texto não couber (até v40).
+  function make(text) {
+    const bytes = Array.from(new TextEncoder().encode(text)), v = chooseVersion(bytes.length);
+    if (v < 0) throw new Error('texto grande demais para QR (' + bytes.length + ' bytes)');
+    const finalCw = interleave(buildData(bytes, v), v), n = size(v), pos = dataPositions(v), bits = [];
+    for (const cw of finalCw) for (let i = 7; i >= 0; i--) bits.push((cw >> i) & 1);
+    let best = null, bestPen = Infinity, bestMask = 0;
+    for (let mask = 0; mask < 8; mask++) {
+      const g = Array.from({ length: n }, () => new Array(n).fill(false));
+      drawFunction(g, v);
+      for (let k = 0; k < pos.length; k++) { const [r, c] = pos[k]; let b = k < bits.length ? bits[k] : 0; if (MASKS[mask](r, c)) b ^= 1; g[r][c] = !!b; }
+      drawFormat(g, v, mask); if (v >= 7) drawVersion(g, v);
+      const pen = penalty(g, n);
+      if (pen < bestPen) { bestPen = pen; best = g; bestMask = mask; }
+    }
+    return { size: n, modules: best, version: v, mask: bestMask };
+  }
+  // Desenha o QR de `text` num <canvas> (com quiet zone). Retorna {size, version}.
+  function draw(text, canvas) {
+    const q = make(text), n = q.size, quiet = 4, total = n + quiet * 2, s = Math.max(2, Math.floor(300 / total)), px = total * s;
+    canvas.width = px; canvas.height = px;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px); ctx.fillStyle = '#000';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.modules[r][c]) ctx.fillRect((c + quiet) * s, (r + quiet) * s, s, s);
+    return { size: n, version: q.version };
+  }
+  return { make, draw };
+})();
+
 /* ===================== Result — revelação e resultado ===================== */
 App.Result = (function(){
   // Revelação dramática (rufar de tambor) e, depois, o conteúdo completo + festa.
@@ -1161,7 +1279,7 @@ App.Result = (function(){
     D.setHTML('stats', `<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>${S.sim.close?'<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>':''}`);
     D.setHTML('full', '<div class="ft">' + (isTour ? 'Classificação da final' : 'Classificação completa') + '</div>' + S.sim.order.map((idx,p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join(''));
     const seedShown = isTour ? S.tourBaseSeed : S.sim.seed;
-    D.setHTML('seedline', `Semente: <code>${seedShown}</code> <button class="btn btn-sm" data-action="copiarSemente" data-arg="${seedShown}">Copiar</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <span class="hint">— reproduza pela URL ou em "Opções avançadas"</span>`);
+    D.setHTML('seedline', `Semente: <code>${seedShown}</code> <button class="btn btn-sm" data-action="copiarSemente" data-arg="${seedShown}">Copiar</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR</button> <span class="hint">— reproduza pela URL ou em "Opções avançadas"</span>`);
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
   // Copia a semente para a área de transferência.
@@ -1182,7 +1300,19 @@ App.Result = (function(){
   }
   // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar).
   async function copyLink(seed){ const url = await buildShareUrl(seed); try { await navigator.clipboard.writeText(url); App.Roster.msg('Link copiado!', true); Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') }); } catch (e) { App.Roster.msg('Link: ' + url, true); Log.warn('Result','clipboard indisponível', e); } }
-  return { reveal, build, copySeed, copyLink, toggleSave, closeSave };
+  // QR Code do link, gerado 100% local (App.QR). Mostra num modal; se a lista
+  // for grande demais para caber no QR, avisa p/ usar o "Copiar link".
+  async function showQR(seed){
+    try {
+      const url = await buildShareUrl(seed);
+      App.QR.draw(url, D.id('qrCanvas'));
+      D.setText('qrSub', 'Aponte a câmera do celular para entrar no sorteio.');
+      D.id('qrModal').classList.add('open');
+      Log.info('Result','QR exibido', { len:url.length });
+    } catch (e) { App.Roster.msg('Lista grande demais para o QR — use o "🔗 Copiar link".', false); Log.warn('Result','QR não gerado', e); }
+  }
+  function closeQR(){ const m = D.id('qrModal'); if (m) m.classList.remove('open'); }
+  return { reveal, build, copySeed, copyLink, showQR, closeQR, toggleSave, closeSave };
 })();
 
 /* ===================== Export — PDF / certificado / imagem ===================== */
@@ -1272,6 +1402,8 @@ App.UI = (function(){
     // resultado / exportações
     copiarSemente:   (el) => App.Result.copySeed(el.dataset.arg),
     copiarLink:      (el) => App.Result.copyLink(el.dataset.arg),
+    mostrarQR:       (el) => App.Result.showQR(el.dataset.arg),
+    fecharQR:        () => App.Result.closeQR(),
     toggleSalvar:    (el, e) => App.Result.toggleSave(e),
     imprimirRanking: () => { App.Export.pdfRanking(); App.Result.closeSave(); },
     certificado:     () => { App.Export.certificate(); App.Result.closeSave(); },
@@ -1284,6 +1416,7 @@ App.UI = (function(){
     if (e.target.closest('.btn')) App.Audio.click();
     if (!e.target.closest('#saveWrap')) App.Result.closeSave();
     if (!e.target.closest('#soundWrap')) App.Audio.closeMenu();
+    if (e.target.id === 'qrModal') App.Result.closeQR();
     const el = e.target.closest('[data-action]'); if (!el) return;
     const name = el.dataset.action, fn = ACTIONS[name];
     if (!fn) { Log.warn('UI','ação sem handler', { action:name }); return; }
