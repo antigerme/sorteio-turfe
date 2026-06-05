@@ -416,7 +416,15 @@ App.Util = (function(){
   const rndPick = a => a[(Math.random() * a.length) | 0];
   // Cor de um cavalo por índice (paleta fixa; gera HSL além do tamanho dela).
   const corOf = i => i < CFG.PAL.length ? CFG.PAL[i] : `hsl(${(i*47)%360},62%,42%)`;
-  return { esc, argmax, clamp, rndPick, corOf };
+  // base64url <-> bytes (URL-safe; sem '=').
+  const b64url = u8 => btoa(String.fromCharCode.apply(null, u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const unb64url = s => { const bin = atob(s.replace(/-/g,'+').replace(/_/g,'/')); const u = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u; };
+  // Compressão (deflate-raw) p/ encurtar a URL do link. Nativo (CompressionStream),
+  // assíncrono, SEM dependência. Esmaga a repetição (&n=/&t=) e os nomes.
+  const supportsCompression = () => typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined';
+  async function deflateB64url(str){ const cs = new CompressionStream('deflate-raw'); const buf = await new Response(new Blob([str]).stream().pipeThrough(cs)).arrayBuffer(); return b64url(new Uint8Array(buf)); }
+  async function inflateB64url(s){ const ds = new DecompressionStream('deflate-raw'); const buf = await new Response(new Blob([unb64url(s)]).stream().pipeThrough(ds)).arrayBuffer(); return new TextDecoder().decode(buf); }
+  return { esc, argmax, clamp, rndPick, corOf, b64url, unb64url, supportsCompression, deflateB64url, inflateB64url };
 })();
 const U = App.Util;
 
@@ -1160,17 +1168,20 @@ App.Result = (function(){
   function copySeed(s){ try { navigator.clipboard.writeText('' + s); App.Roster.msg('Semente copiada!', true); Log.info('Result','semente copiada', { seed:s }); } catch (e) { App.Roster.msg('Semente: ' + s, true); Log.warn('Result','clipboard indisponível', e); } }
   function toggleSave(e){ if (e) e.stopPropagation(); D.id('saveMenu').classList.toggle('open'); }
   function closeSave(){ const m = D.id('saveMenu'); if (m) m.classList.remove('open'); }
-  // Monta uma URL que reproduz este sorteio (modo + participantes + semente).
-  // Params repetidos n/t (URLSearchParams) — robustos a vírgula/acento/espaço nos nomes.
-  function buildShareUrl(seed){
+  // Monta a URL que reproduz este sorteio (modo + participantes + semente).
+  // Os dados vão no FRAGMENTO (#) — que NÃO é enviado no GET (sem limite de servidor),
+  // comprimidos quando possível (#d=…) p/ encurtar; senão, fragmento cru (#…).
+  async function buildShareUrl(seed){
     const base = location.href.split(/[?#]/)[0];
     const p = new URLSearchParams();
     p.set('modo', S.mode); p.set('seed', seed);
     S.participantes.forEach(n => { p.append('n', n); if (S.mode === 'teams') p.append('t', S.teamOf[n] || ''); });
-    return base + '?' + p.toString();
+    const q = p.toString();
+    if (U.supportsCompression()) { try { return base + '#d=' + await U.deflateB64url(q); } catch (e) { Log.warn('Result','compressão falhou; link sem compressão', e); } }
+    return base + '#' + q;
   }
   // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar).
-  function copyLink(seed){ const url = buildShareUrl(seed); try { navigator.clipboard.writeText(url); App.Roster.msg('Link copiado!', true); Log.info('Result','link copiado', { len:url.length }); } catch (e) { App.Roster.msg('Link: ' + url, true); Log.warn('Result','clipboard indisponível', e); } }
+  async function copyLink(seed){ const url = await buildShareUrl(seed); try { await navigator.clipboard.writeText(url); App.Roster.msg('Link copiado!', true); Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') }); } catch (e) { App.Roster.msg('Link: ' + url, true); Log.warn('Result','clipboard indisponível', e); } }
   return { reveal, build, copySeed, copyLink, toggleSave, closeSave };
 })();
 
@@ -1282,9 +1293,17 @@ App.UI = (function(){
 
   // Pré-preenche o sorteio a partir da URL (?modo=&seed=&n=&t=). NÃO inicia —
   // o apresentador confere e clica em Iniciar. Reusa Modes/Roster/Teams.
-  function applyUrlParams(){
+  async function applyUrlParams(){
     try {
-      const p = new URLSearchParams(location.search);
+      // Fonte da query: fragmento comprimido (#d=…), fragmento cru (#…) ou ?query (compat).
+      const h = location.hash.slice(1);
+      let q;
+      if (h.startsWith('d=')) {
+        if (!U.supportsCompression()) { App.Roster.msg('Este link precisa de um navegador atualizado.', false); return; }
+        q = await U.inflateB64url(h.slice(2));
+      } else if (/[=&]/.test(h)) { q = h; }
+      else { q = location.search.slice(1); }
+      const p = new URLSearchParams(q || '');
       let loaded = false;
       const modo = p.get('modo');
       if (modo && CFG.MODE_HINTS[modo]) { App.Modes.set(modo); loaded = true; }
@@ -1318,8 +1337,8 @@ App.UI = (function(){
     if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
     // Render inicial
     App.Roster.render(); App.Teams.renderChips();
-    // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável)
-    applyUrlParams();
+    // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável; assíncrono p/ descomprimir)
+    applyUrlParams().catch(e => Log.warn('UI','applyUrlParams falhou', e));
     Log.info('UI','interface pronta');
   }
   return { init, ACTIONS };
