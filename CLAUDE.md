@@ -53,6 +53,7 @@ Há três modos:
 | `App.Tournament` | Baterias/chaveamento até a grande final |
 | `App.Result` | Revelação, pódio, stats, placar de equipes, exportar |
 | `App.Export` | PDF do resultado, certificado e imagem PNG |
+| `App.QR` | Gerador de QR Code próprio (vanilla, byte mode/nível L) p/ o link compartilhável |
 | `App.UI` | Fiação: delegação de cliques (`data-action`), teclado, `init` |
 
 Aliases curtos para os módulos fundamentais: `CFG`, `Log`, `U`, `D`, `S`.
