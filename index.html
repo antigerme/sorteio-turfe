@@ -1286,13 +1286,14 @@ App.Result = (function(){
   function copySeed(s){ try { navigator.clipboard.writeText('' + s); App.Roster.msg('Semente copiada!', true); Log.info('Result','semente copiada', { seed:s }); } catch (e) { App.Roster.msg('Semente: ' + s, true); Log.warn('Result','clipboard indisponível', e); } }
   function toggleSave(e){ if (e) e.stopPropagation(); D.id('saveMenu').classList.toggle('open'); }
   function closeSave(){ const m = D.id('saveMenu'); if (m) m.classList.remove('open'); }
-  // Monta a URL que reproduz este sorteio (modo + participantes + semente).
+  // Monta a URL que reproduz este sorteio (modo + participantes + prêmio + semente).
   // Os dados vão no FRAGMENTO (#) — que NÃO é enviado no GET (sem limite de servidor),
   // comprimidos quando possível (#d=…) p/ encurtar; senão, fragmento cru (#…).
   async function buildShareUrl(seed){
     const base = location.href.split(/[?#]/)[0];
     const p = new URLSearchParams();
     p.set('modo', S.mode); p.set('seed', seed);
+    if (S.prize) p.set('p', S.prize);
     S.participantes.forEach(n => { p.append('n', n); if (S.mode === 'teams') p.append('t', S.teamOf[n] || ''); });
     const q = p.toString();
     if (U.supportsCompression()) { try { return base + '#d=' + await U.deflateB64url(q); } catch (e) { Log.warn('Result','compressão falhou; link sem compressão', e); } }
@@ -1456,6 +1457,8 @@ App.UI = (function(){
       }
       const seed = (p.get('seed') || p.get('semente') || '').trim();
       if (/^\d+$/.test(seed)) { D.id('seedInp').value = seed.slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
+      const prize = (p.get('p') || '').trim();
+      if (prize) { D.id('prizeInp').value = prize.slice(0, 60); loaded = true; }
       if (loaded) { App.Roster.msg('Sorteio carregado do link — confira e clique em Iniciar ✓', true); Log.info('UI','sorteio carregado da URL', { modo:S.mode, participantes:S.participantes.length, seed }); }
     } catch (e) { Log.warn('UI','falha ao ler parâmetros da URL', e); }
   }
