@@ -1,0 +1,19 @@
+name: CI
+
+# Testa o "sorteio justo" (determinismo) e o gerador de QR a cada push/PR.
+# Sem dependências: roda só `node tests/run.mjs` (carrega o index.html real num vm).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Rodar a suíte
+        run: node tests/run.mjs

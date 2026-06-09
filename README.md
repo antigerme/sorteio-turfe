@@ -14,6 +14,7 @@
 ![Sem backend](https://img.shields.io/badge/backend-nenhum-1D9E75)
 ![Idioma](https://img.shields.io/badge/idioma-pt--BR-185FA5)
 ![Sorteio justo](https://img.shields.io/badge/sorteio-justo%20(determin%C3%ADstico)-BA7517)
+![CI](https://github.com/antigerme/sorteio-turfe/actions/workflows/ci.yml/badge.svg)
 
 </div>
 
@@ -106,6 +107,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - **Web Audio API** (sons sintetizados, nenhum arquivo de áudio) · **Web Speech API** (narração por voz) · **Canvas** (photo finish e confete).
 - Única dependência externa: **[jsPDF](https://github.com/parallax/jsPDF)** via CDN, apenas para exportar PDF.
 - **Simulação determinística**: a corrida inteira é pré-calculada a partir da semente (RNG `mulberry32`); a animação só reproduz os quadros já calculados.
+- **Testes sem dependências** em [`tests/run.mjs`](tests/run.mjs) (`node tests/run.mjs`), rodados no **CI** a cada push/PR: travam o determinismo do sorteio (golden) e a validade do QR Code.
 
 Detalhes de arquitetura, módulos, logging e convenções estão em **[`CLAUDE.md`](CLAUDE.md)**.
 

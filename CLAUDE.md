@@ -17,7 +17,8 @@ Há três modos:
 ## Arquitetura
 
 - **Arquivo único**: `index.html` contém **tudo** — marcação HTML, CSS (`<style>`) e
-  JavaScript (`<script>`). Não há build, bundler, `package.json`, testes nem backend.
+  JavaScript (`<script>`). Não há build, bundler, `package.json` nem backend. O **app** é um
+  único arquivo; o repo inclui só uma suíte de testes dev (Node, sem deps) em `tests/`.
 - **Modular por dentro**: o JS vive sob um único namespace global **`App`**. Cada
   recurso é um **módulo** (IIFE que devolve sua API pública) com responsabilidade
   única. Para adicionar/remover/alterar algo, mexa só no módulo correspondente.
@@ -77,7 +78,8 @@ python3 -m http.server 8000   # depois acesse http://localhost:8000
 ```
 
 Áudio (Web Audio API) e narração (Web Speech API) só iniciam após interação do usuário,
-por causa das políticas de autoplay dos navegadores. Não há lint/test/build.
+por causa das políticas de autoplay dos navegadores. Não há lint/build; os testes ficam em
+`tests/run.mjs` (`node tests/run.mjs`, sem dependências).
 
 ## Estrutura do `index.html`
 
@@ -141,10 +143,22 @@ por causa das políticas de autoplay dos navegadores. Não há lint/test/build.
 - **Áudio**: sons são sintetizados (sem arquivos). Reaproveite os helpers de `App.Audio`
   (`beep`, `note`, `noise`) em vez de adicionar assets.
 
-## Testar/validar (sem framework)
+## Testar/validar
 
-Não há suíte automatizada no repo, mas o padrão usado para validar mudanças é:
-- **Regressão de determinismo**: comparar `App.Sim.simulate` contra a versão anterior
-  (de `git show <ref>:index.html`) em muitas sementes × `n` — devem ser idênticas.
-- **Teste funcional headless** (Playwright): abrir o `file://`, exercitar UI/corrida/
-  torneio/foto, capturar `console`/`pageerror` e conferir zero erros.
+Há uma **suíte sem dependências** em `tests/run.mjs` (só `node`, sem navegador), rodada
+pelo **CI** (`.github/workflows/ci.yml`) a cada push/PR:
+
+```bash
+node tests/run.mjs            # roda tudo
+node tests/run.mjs --update   # regenera o golden (após mudança INTENCIONAL na simulação)
+```
+
+Ela carrega o **`index.html` real** num contexto `vm` (com stubs mínimos de DOM) e cobre:
+- **Determinismo (sorteio justo)**: `simulate(seed,n)` reprodutível e sensível à semente; RNG
+  determinístico; e a ordem de chegada (+ eventos) **travada por um golden hash** sobre uma
+  grade de sementes × `n` (`tests/golden-sim.json`). Mudou a simulação de propósito? rode `--update`.
+- **QR Code**: format info nas posições da ISO (regressão do bug de transposição), estrutura
+  (finder patterns), e **round-trip** com um decodificador independente (reescrito pela ISO).
+
+Complementarmente, dá pra fazer um **teste funcional headless** (Playwright): abrir o `file://`,
+exercitar UI/corrida/torneio/foto e conferir zero `console`/`pageerror`.
