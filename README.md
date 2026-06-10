@@ -78,7 +78,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - ⚖️ **Sorteio justo e reproduzível** — resultado 100% determinístico por **semente**: a mesma semente reproduz exatamente o mesmo sorteio (transparência total).
 - 🔗 **Link compartilhável** — no resultado, **"Copiar link"** gera uma URL que **reproduz o sorteio inteiro** (modo + participantes + semente) ao abrir; o apresentador só confere e clica em Iniciar.
 - 📱 **QR Code do link** — gere um QR na tela de resultado pra galera **escanear e abrir o sorteio no celular**. Gerado 100% no navegador (sem lib, offline) — nenhum dado sai dali. **Baixe em PNG ou SVG** pra slide/impressão.
-- ♿ **Acessível** — respeita **movimento reduzido** do sistema (`prefers-reduced-motion` → vai direto ao resultado, sem animação), tem **leitor de tela** (anúncios `aria-live` do vencedor), **navegação por teclado** com foco visível e modal que fecha no **Esc**.
+- ♿ **Acessível** — respeita **movimento reduzido** do sistema (`prefers-reduced-motion` → vai direto ao resultado, sem animação), tem **leitor de tela** (anúncios `aria-live` do vencedor), **navegação por teclado** com foco visível, modal que fecha no **Esc** e **paleta segura para daltonismo** (com número da baia e nome como identificadores, além da cor).
 - 💾 **Não perde seu cadastro** — participantes, equipes, prêmio e semente ficam **salvos no navegador** e voltam ao recarregar a página (fechou sem querer? está tudo lá). Fica só no seu navegador; **🗑️ Limpar tudo** apaga.
 - 🌗 **Tema claro/escuro** — botão no canto que **lembra sua escolha** (e respeita o tema do sistema na 1ª visita).
 - 🖥️ **Modo apresentação** — botão de **tela cheia** pra projetar a corrida sem distrações.
