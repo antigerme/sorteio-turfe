@@ -1410,13 +1410,21 @@ App.Result = (function(){
     if (U.supportsCompression()) { try { return base + '#d=' + await U.deflateB64url(q); } catch (e) { Log.warn('Result','compressão falhou; link sem compressão', e); } }
     return base + '#' + q;
   }
-  // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar) e
-  // mostra um preview do link (campo selecionável + tamanho) para conferência.
+  // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar).
+  // No sucesso: só o toast (com o tamanho). Se o clipboard estiver bloqueado, aí sim
+  // mostra o preview (campo selecionável) como fallback p/ copiar à mão.
   async function copyLink(seed){
     const url = await buildShareUrl(seed);
-    showLinkPreview(url);
-    try { await navigator.clipboard.writeText(url); App.Roster.msg('Link copiado! 👇', true); Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') }); }
-    catch (e) { App.Roster.msg('Link gerado abaixo 👇 — selecione e copie', true); Log.warn('Result','clipboard indisponível', e); }
+    try {
+      await navigator.clipboard.writeText(url);
+      const box = D.id('linkPreview'); if (box) box.style.display = 'none';
+      App.Roster.msg(`Link copiado! (${url.length} caracteres${url.includes('#d=') ? ', comprimido' : ''})`, true);
+      Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') });
+    } catch (e) {
+      showLinkPreview(url);
+      App.Roster.msg('Não consegui copiar sozinho — selecione o link abaixo 👇', true);
+      Log.warn('Result','clipboard indisponível, preview exibido', e);
+    }
   }
   // Preview do link: campo readonly (clica = seleciona tudo) + nº de caracteres.
   function showLinkPreview(url){
