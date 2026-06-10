@@ -168,6 +168,13 @@
   .savemenu.open { display:flex; }
   .savemenu .savehead { font-size:12px; color:var(--ts); padding:2px 4px 6px; }
   .savemenu .btn { justify-content:flex-start; width:100%; }
+  /* ---- Acessibilidade: foco visível, leitor de tela e movimento reduzido ---- */
+  .btn:focus-visible, .mode-btn:focus-visible, .seed-copy:focus-visible, [data-action]:focus-visible { outline:2px solid var(--go); outline-offset:2px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  .qr-actions { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+  }
 </style>
 </head>
 <body>
@@ -200,8 +207,8 @@
     <div class="modehint" id="modeHint">Uma corrida única decide o ganhador.</div>
 
     <div class="input-row">
-      <input type="text" id="inp" placeholder="Nome do participante..." maxlength="40" autocomplete="off">
-      <select id="teamSel" style="display:none"></select>
+      <input type="text" id="inp" placeholder="Nome do participante..." maxlength="40" autocomplete="off" aria-label="Nome do participante">
+      <select id="teamSel" style="display:none" aria-label="Equipe do participante"></select>
       <button class="btn" data-action="addOne">Adicionar</button>
     </div>
     <div class="tools">
@@ -212,7 +219,7 @@
 
     <div class="panel" id="teamsBox">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <input type="text" id="newTeam" placeholder="Nome da equipe / departamento" maxlength="24" style="min-width:160px">
+        <input type="text" id="newTeam" placeholder="Nome da equipe / departamento" maxlength="24" style="min-width:160px" aria-label="Nome da equipe">
         <button class="btn btn-sm btn-go" data-action="criarEquipe">Criar equipe</button>
       </div>
       <div id="teamChips" class="grid" style="margin-bottom:10px"></div>
@@ -220,18 +227,18 @@
     </div>
 
     <div class="panel" id="bulk">
-      <textarea id="ta" placeholder="Cole os nomes — um por linha&#10;&#10;Ana Souza&#10;Bruno Lima&#10;Carla Mendes"></textarea>
+      <textarea id="ta" placeholder="Cole os nomes — um por linha&#10;&#10;Ana Souza&#10;Bruno Lima&#10;Carla Mendes" aria-label="Lista de nomes (um por linha)"></textarea>
       <div class="hint" style="margin:6px 0 8px">Um nome por linha (também aceita .txt colado). No modo equipes use "Nome, Equipe". Duplicados são ignorados.</div>
       <button class="btn btn-sm btn-go" data-action="addBulk">Adicionar lista</button>
     </div>
 
     <label class="fld">🏆 Prêmio em disputa (opcional)</label>
-    <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%">
+    <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio em disputa">
 
     <details id="advOpts">
       <summary>Opções avançadas — sorteio justo</summary>
       <label class="fld">Semente (opcional)</label>
-      <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%">
+      <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%" aria-label="Semente do sorteio (opcional)">
       <div class="hint" style="margin-top:6px">Use a mesma semente para reproduzir exatamente o mesmo sorteio.</div>
     </details>
 
@@ -303,8 +310,8 @@
 <!-- Overlays globais (contagem, photo finish, confete) -->
 <div id="cd"><div id="cd-num"></div></div>
 <div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
-<div id="qrModal"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas"></canvas><div class="qr-sub" id="qrSub"></div><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div>
-<canvas id="confetti" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
+<div id="qrModal" role="dialog" aria-modal="true" aria-label="QR Code do sorteio"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas" role="img" aria-label="QR Code do link do sorteio"></canvas><div class="qr-sub" id="qrSub"></div><div class="qr-actions"><button class="btn btn-sm" data-action="baixarQrPng">⬇️ PNG</button><button class="btn btn-sm" data-action="baixarQrSvg">⬇️ SVG</button><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div></div>
+<canvas id="confetti" aria-hidden="true" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
@@ -583,12 +590,16 @@ App.View = (function(){
     } catch (e) { Log.warn('View','tela cheia indisponível', e); }
   }
   function syncFs(){ const b = D.id('fsBtn'); if (b) { const on = !!fsEl(); b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Sair da tela cheia' : 'Tela cheia (apresentação)'; } }
+  // Movimento reduzido: respeita o prefers-reduced-motion do sistema (corrida vai direto ao resultado).
+  function reducedMotion(){ try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
+  // Anúncio para leitores de tela via região aria-live (#srLive). Limpa antes p/ forçar releitura.
+  function announce(t){ const el = D.id('srLive'); if (!el) return; el.textContent = ''; setTimeout(() => { el.textContent = t; }, 30); Log.debug('View','announce', { t }); }
   function init(){
     initTheme();
     try { document.addEventListener('fullscreenchange', syncFs); document.addEventListener('webkitfullscreenchange', syncFs); } catch (e) {}
     syncFs();
   }
-  return { setTheme, toggleTheme, initTheme, toggleFullscreen, init };
+  return { setTheme, toggleTheme, initTheme, toggleFullscreen, reducedMotion, announce, init };
 })();
 
 /* ===================== Timing — timers agendados ===================== */
@@ -1129,6 +1140,8 @@ App.Race = (function(){
     D.setText('raceprize', (S.prize && showPrize) ? ('🏆 Em disputa: ' + S.prize) : '');
     const nv = D.id('narr'); nv.classList.remove('fire'); nv.textContent = 'Cavalos a postos na linha de largada...';
     D.id('pista').classList.remove('reta');
+    if (App.View.reducedMotion()) return runFast(); // respeita prefers-reduced-motion
+    App.View.announce('Corrida começando.');
     App.Audio.crowdStart(); App.Audio.crowdSet(CFG.crowd.idle); App.Audio.bugle(); App.Audio.say('Cavalos a postos!', true);
     // contagem regressiva
     App.Timing.seq(T.cd3, () => { showCD('3'); App.Audio.beep(580,.16,'square',.16); App.Audio.say('três', true); });
@@ -1173,14 +1186,27 @@ App.Race = (function(){
     App.Audio.crowdSet(CFG.crowd.reta); App.Audio.startHeart();
   }
 
+  // Fixa posições/colocações finais (compartilhado pelo fim normal e pelo modo rápido).
+  function placeFinal(){
+    const fin = S.sim.frames[S.sim.totalSteps-1] || [];
+    for (let i=0;i<fin.length;i++){ const el = D.id('cav-'+i); if (el) el.style.left = fin[i].toFixed(2)+'%'; }
+    S.sim.order.forEach((idx,rank) => { const b = D.id('bdg-'+idx); if (b){ b.textContent = rank+1; b.style.background = rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
+    S.sim.order.slice(0,3).forEach(i => { const r = D.id('raia-'+i); if (r) r.style.background = 'rgba(29,158,117,.16)'; });
+  }
+  // Movimento reduzido: pula contagem + animação e vai direto ao resultado.
+  function runFast(){
+    S.ended = true; setHeader('Resultado', false); placeFinal();
+    const v = S.cavalos[S.sim.order[0]];
+    const nv = D.id('narr'); if (nv) nv.textContent = '🏁 ' + v.nome + ' venceu!';
+    App.Audio.winnerFanfare();
+    Log.info('Race','movimento reduzido — resultado direto', { vencedor:v.nome });
+    App.Timing.seq(500, () => afterRace());
+  }
   // Fim da corrida: fixa posições/colocações finais; foto se chegada apertada.
   function endRace(){
     if (S.ended) return; S.ended = true;
     if (S.raf) cancelAnimationFrame(S.raf); clearTimeout(S.narrTimer); App.Audio.stopHeart();
-    const fin = S.sim.frames[S.sim.totalSteps-1];
-    for (let i=0;i<fin.length;i++){ const el = D.id('cav-'+i); if (el) el.style.left = fin[i].toFixed(2)+'%'; }
-    S.sim.order.forEach((idx,rank) => { const b = D.id('bdg-'+idx); if (b){ b.textContent = rank+1; b.style.background = rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
-    S.sim.order.slice(0,3).forEach(i => { const r = D.id('raia-'+i); if (r) r.style.background = 'rgba(29,158,117,.16)'; });
+    placeFinal();
     setHeader('Corrida encerrada!', false);
     const v = S.cavalos[S.sim.order[0]];
     Log.info('Race','corrida encerrada', { vencedor:v.nome, top3:S.sim.order.slice(0,3).map(i=>S.cavalos[i].nome), close:S.sim.close });
@@ -1248,6 +1274,7 @@ App.Tournament = (function(){
     let nextLabel = 'Próxima eliminatória';
     if (isLast) { const next = makeHeats(S.tour.advancing, CFG.MAXHEAT); nextLabel = next.length === 1 ? '🏆 Ir para a Grande Final' : 'Próxima rodada'; }
     D.setText('heatNext', nextLabel);
+    App.View.announce('Eliminatória ' + (S.tour.heatIdx+1) + ' concluída. ' + w + ' avança.');
     Log.info('Tournament','bateria concluída', { vencedor:w, bateria:S.tour.heatIdx+1, de:S.tour.heats.length });
     App.Audio.applause(1.4); App.Audio.say(w + ' avança para a próxima fase!', true);
     App.Audio.crowdSet(CFG.crowd.zero); App.Timing.seq(CFG.timing.heatStopDelay, () => App.Audio.crowdStop());
@@ -1373,7 +1400,13 @@ App.QR = (function(){
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.modules[r][c]) ctx.fillRect((c + quiet) * s, (r + quiet) * s, s, s);
     return { size: n, version: q.version };
   }
-  return { make, draw };
+  // Gera um SVG vetorial (fundo branco) do QR de `text` — para baixar/imprimir sem perder nitidez.
+  function svg(text) {
+    const q = make(text), n = q.size, quiet = 4, total = n + quiet * 2; let rects = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.modules[r][c]) rects += `<rect x="${c + quiet}" y="${r + quiet}" width="1" height="1"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#fff"/><g fill="#000">${rects}</g></svg>`;
+  }
+  return { make, draw, svg };
 })();
 
 /* ===================== Result — revelação e resultado ===================== */
@@ -1381,9 +1414,17 @@ App.Result = (function(){
   // Revelação dramática (rufar de tambor) e, depois, o conteúdo completo + festa.
   function reveal(){
     App.Screens.show('res'); build();
+    const v = S.cavalos[S.sim.order[0]];
+    App.View.announce((S.mode === 'tournament' ? 'Campeão do torneio' : 'Vencedor') + ': ' + v.nome + '.');
+    if (App.View.reducedMotion()) { // sem suspense/confete: mostra o resultado direto
+      D.id('reveal').style.display = 'none'; D.id('resContent').style.display = 'block';
+      App.Audio.winnerFanfare(); App.Audio.applause(2);
+      Log.info('Result','revelação (movimento reduzido)', { vencedor:v.nome, mode:S.mode });
+      return;
+    }
     D.id('reveal').style.display = 'block'; D.id('resContent').style.display = 'none';
     App.Audio.crowdSet(CFG.crowd.revealLow); App.Audio.drumroll(2.4); App.Audio.say('E o grande vencedor é...', true);
-    Log.info('Result','revelação iniciada', { vencedor:S.cavalos[S.sim.order[0]].nome, mode:S.mode });
+    Log.info('Result','revelação iniciada', { vencedor:v.nome, mode:S.mode });
     App.Timing.seq(CFG.timing.revealDelay, () => {
       D.id('reveal').style.display = 'none'; D.id('resContent').style.display = 'block';
       App.Audio.cymbal(); App.Audio.winnerFanfare(); App.Audio.applause(3); App.Audio.crowdSet(CFG.crowd.revealHigh); App.FX.celebration();
@@ -1457,17 +1498,24 @@ App.Result = (function(){
   }
   // QR Code do link, gerado 100% local (App.QR). Mostra num modal; se a lista
   // for grande demais para caber no QR, avisa p/ usar o "Copiar link".
+  let lastQrUrl = '', lastFocus = null;
   async function showQR(seed){
     try {
-      const url = await buildShareUrl(seed);
+      const url = await buildShareUrl(seed); lastQrUrl = url;
       App.QR.draw(url, D.id('qrCanvas'));
       D.setText('qrSub', 'Aponte a câmera do celular para entrar no sorteio.');
-      D.id('qrModal').classList.add('open');
+      lastFocus = document.activeElement;
+      const m = D.id('qrModal'); m.classList.add('open');
+      const fb = m.querySelector('button'); if (fb) fb.focus(); // foco entra no modal (teclado)
       Log.info('Result','QR exibido', { len:url.length });
     } catch (e) { App.Roster.msg('Lista grande demais para o QR — use o "🔗 Copiar link".', false); Log.warn('Result','QR não gerado', e); }
   }
-  function closeQR(){ const m = D.id('qrModal'); if (m) m.classList.remove('open'); }
-  return { reveal, build, copySeed, copyLink, copyLinkPreview, showQR, closeQR, toggleSave, closeSave };
+  // Baixa o QR exibido como PNG (rasterizado do canvas) ou SVG (vetorial).
+  function downloadBlob(blob, name){ try { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 3000); } catch (e) { Log.warn('Result','download falhou', e); } }
+  function downloadQrPng(){ const cv = D.id('qrCanvas'); if (!cv || !cv.toBlob) return; cv.toBlob(b => { if (b) { downloadBlob(b, 'sorteio-qr.png'); App.Roster.msg('QR (PNG) baixado!', true); } else App.Roster.msg('Não foi possível gerar o PNG.', false); }); }
+  function downloadQrSvg(){ if (!lastQrUrl) return; try { downloadBlob(new Blob([App.QR.svg(lastQrUrl)], { type:'image/svg+xml' }), 'sorteio-qr.svg'); App.Roster.msg('QR (SVG) baixado!', true); } catch (e) { App.Roster.msg('Não foi possível gerar o SVG.', false); Log.warn('Result','SVG do QR falhou', e); } }
+  function closeQR(){ const m = D.id('qrModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
+  return { reveal, build, copySeed, copyLink, copyLinkPreview, showQR, closeQR, downloadQrPng, downloadQrSvg, toggleSave, closeSave };
 })();
 
 /* ===================== Export — PDF / certificado / imagem ===================== */
@@ -1563,6 +1611,8 @@ App.UI = (function(){
     copiarLinkPreview: () => App.Result.copyLinkPreview(),
     mostrarQR:       (el) => App.Result.showQR(el.dataset.arg),
     fecharQR:        () => App.Result.closeQR(),
+    baixarQrPng:     () => App.Result.downloadQrPng(),
+    baixarQrSvg:     () => App.Result.downloadQrSvg(),
     toggleSalvar:    (el, e) => App.Result.toggleSave(e),
     imprimirRanking: () => { App.Export.pdfRanking(); App.Result.closeSave(); },
     certificado:     () => { App.Export.certificate(); App.Result.closeSave(); },
@@ -1635,6 +1685,8 @@ App.UI = (function(){
     D.on(D.id('seedInp'), 'input', () => App.Store.save());
     // Delegação global de cliques
     D.on(document, 'click', onClick);
+    // Teclado global: Esc fecha o modal do QR e os menus abertos
+    D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
     App.View.init();
     D.on(D.id('volSlider'), 'input', e => App.Audio.setVolume(e.target.value / 100));
@@ -1662,5 +1714,6 @@ App.UI = (function(){
 })();
 </script>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="srLive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 </body>
 </html>
