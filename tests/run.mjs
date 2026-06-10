@@ -246,6 +246,22 @@ function testPrefs(App) {
   ok('loadPrefs()/initTheme() rodam sem erro', !threw);
 }
 
+/* ----------------------------------------------------------------------------
+ * 5) Acessibilidade + download do QR (App.View + App.QR.svg)
+ * -------------------------------------------------------------------------- */
+function testA11yQr(App) {
+  section('Acessibilidade + download do QR');
+  ok('reducedMotion() retorna boolean', typeof App.View.reducedMotion() === 'boolean');
+  let threw = false; try { App.View.announce('teste'); } catch (e) { threw = true; }
+  ok('announce() não quebra sem #srLive', !threw);
+  const url = 'https://sorteio.exemplo/#d=AbC-_123';
+  const q = App.QR.make(url), svg = App.QR.svg(url);
+  let dark = 0; for (const row of q.modules) for (const m of row) if (m) dark++;
+  const rects = (svg.match(/<rect /g) || []).length; // 1 fundo branco + 1 por módulo escuro
+  ok('App.QR.svg() é um SVG válido', svg.startsWith('<svg') && svg.includes('viewBox') && svg.includes('</svg>'));
+  ok('SVG tem 1 retângulo por módulo escuro (+ fundo)', rects === dark + 1, `${rects} rects vs ${dark} módulos`);
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
@@ -254,5 +270,6 @@ testDeterminism(App);
 testQR(App);
 testPersistence(App);
 testPrefs(App);
+testA11yQr(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);

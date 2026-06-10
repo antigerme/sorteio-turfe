@@ -43,7 +43,7 @@ Há três modos:
 | `App.RNG` | `mulberry32` + `shuffle` (base do sorteio justo) |
 | `App.State` (`S`) | Estado central mutável (lido/escrito pelos demais) |
 | `App.Store` | Persistência local (localStorage): **cadastro** (auto) + **preferências** de UI via `pref()` (tema, mudo/voz, volume) |
-| `App.View` | Chrome visual: **tema** claro/escuro (persistido) e **tela cheia** (apresentação) |
+| `App.View` | Chrome visual + a11y: **tema** claro/escuro (persistido), **tela cheia**, `reducedMotion()` (respeita `prefers-reduced-motion`) e `announce()` (região `aria-live`) |
 | `App.Timing` | `seq`/`clearSeq` (timers agendados com try/catch) |
 | `App.Bus` | Event bus mínimo (`on`/`emit`) — desacopla reações |
 | `App.Audio` | Web Audio (sons sintetizados) + narração por voz + **volume/mudo** (nó `master`, persistidos) |
@@ -60,7 +60,7 @@ Há três modos:
 | `App.Tournament` | Baterias/chaveamento até a grande final |
 | `App.Result` | Revelação, pódio, stats, placar de equipes, exportar |
 | `App.Export` | PDF do resultado, certificado e imagem PNG |
-| `App.QR` | Gerador de QR Code próprio (vanilla, byte mode/nível L) p/ o link compartilhável |
+| `App.QR` | Gerador de QR Code próprio (vanilla, byte mode/nível L); desenha no canvas e exporta **PNG/SVG** |
 | `App.UI` | Fiação: delegação de cliques (`data-action`), teclado, `init` |
 
 Aliases curtos para os módulos fundamentais: `CFG`, `Log`, `U`, `D`, `S`.
@@ -124,6 +124,11 @@ por causa das políticas de autoplay dos navegadores. Não há lint/build; os te
   ~3 KB → centenas de bytes). No boot, `App.UI.applyUrlParams` (async) descomprime e
   **pré-preenche** o cadastro (sem auto-iniciar), com fallback p/ fragmento cru `#…` e p/
   `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `p` (prêmio), `seed`).
+- **Acessibilidade**: foco visível (`:focus-visible`), `aria-label` nos campos, modal do QR como
+  `role="dialog"` (foco entra ao abrir, `Esc` fecha e devolve o foco) e anúncios de resultado por
+  `App.View.announce()` (região `#srLive` `aria-live`). Com **`prefers-reduced-motion`**,
+  `App.View.reducedMotion()` faz a corrida **pular a animação e ir direto ao resultado**
+  (`App.Race.runFast()` + revelação sem suspense/confete); o CSS também zera transições/animações.
 
 ## Parâmetros (tudo em `App.Config`)
 
