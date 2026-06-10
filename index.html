@@ -361,7 +361,7 @@ App.Config = {
   APPNAME: 'Sorteio (Turfe)',
   MAX: 100,                 // limite de participantes
   MAXHEAT: 6,               // máx. de participantes por bateria (torneio)
-  HORSES: ['🐎','🦄','🐴'], // emojis dos cavalos (ciclados por índice)
+  HORSES: ['🐎','🦄','🐴','🦓','🏇','🎠','🫏'], // "cavalos" ciclados por índice (cavalo/unicórnio/égua/zebra/jóquei/carrossel/burro); 🫏 é Unicode 15 (pode virar tofu em aparelho antigo)
   PAL: ['#0072B2','#D55E00','#785EF0','#009E73','#CC79A7','#3A3A3A','#56B4E9','#9B1D5E','#E69F00','#117733'], // paleta segura p/ daltonismo (Okabe-Ito + extras); ordem intercala frio/quente p/ baias vizinhas distintas
   TEAMPAL: ['#0072B2','#D55E00','#117733','#AA3377','#785EF0','#3A3A3A','#009E73','#8A5A00'], // equipes: tons escuros (texto branco) e distinguíveis em daltonismo
   MODE_HINTS: {
@@ -448,6 +448,10 @@ App.Util = (function(){
   const rndPick = a => a[(Math.random() * a.length) | 0];
   // Cor de um cavalo por índice (paleta fixa; gera HSL além do tamanho dela).
   const corOf = i => i < CFG.PAL.length ? CFG.PAL[i] : `hsl(${(i*47)%360},60%,${i%2?40:30}%)`; // além da paleta: alterna claridade (ajuda em daltonismo)
+  // Emoji "cavalo" do participante i. O jóquei 🏇 (único com pessoa) varia o tom de pele,
+  // ciclando os 5 tons de forma determinística (mesma corrida = mesmos tons).
+  const SKIN = ['🏻','🏼','🏽','🏾','🏿'];
+  const horseEmoji = i => { const e = CFG.HORSES[i % CFG.HORSES.length]; return e === '🏇' ? e + SKIN[Math.floor(i / CFG.HORSES.length) % SKIN.length] : e; };
   // base64url <-> bytes (URL-safe; sem '=').
   const b64url = u8 => btoa(String.fromCharCode.apply(null, u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const unb64url = s => { const bin = atob(s.replace(/-/g,'+').replace(/_/g,'/')); const u = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u; };
@@ -456,7 +460,7 @@ App.Util = (function(){
   const supportsCompression = () => typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined';
   async function deflateB64url(str){ const cs = new CompressionStream('deflate-raw'); const buf = await new Response(new Blob([str]).stream().pipeThrough(cs)).arrayBuffer(); return b64url(new Uint8Array(buf)); }
   async function inflateB64url(s){ const ds = new DecompressionStream('deflate-raw'); const buf = await new Response(new Blob([unb64url(s)]).stream().pipeThrough(ds)).arrayBuffer(); return new TextDecoder().decode(buf); }
-  return { esc, argmax, clamp, rndPick, corOf, b64url, unb64url, supportsCompression, deflateB64url, inflateB64url };
+  return { esc, argmax, clamp, rndPick, corOf, horseEmoji, b64url, unb64url, supportsCompression, deflateB64url, inflateB64url };
 })();
 const U = App.Util;
 
@@ -893,7 +897,7 @@ App.Roster = (function(){
     if (!S.participantes.length) { el.innerHTML = '<div class="empty">Nenhum participante ainda. Adicione pelo menos 2 para começar.</div>'; return; }
     el.innerHTML = S.participantes.map((n,i) => {
       const tg = (S.mode === 'teams' && S.teamOf[n]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[n])}">${U.esc(S.teamOf[n])}</span>` : '';
-      return `<div class="chip"><span class="e">${CFG.HORSES[i%3]}</span><span class="n">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      return `<div class="chip"><span class="e">${U.horseEmoji(i)}</span><span class="n">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
     }).join('');
   }
   return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render };
@@ -1129,7 +1133,7 @@ App.Race = (function(){
   function run(names, seed, label){
     App.Audio.ensure(); clearAll();
     S.prize = D.id('prizeInp').value.trim();
-    S.cavalos = names.map((nome,i) => ({ nome, team:(S.teamOf[nome]||null), emoji:CFG.HORSES[i%3], cor:U.corOf(i), idx:i }));
+    S.cavalos = names.map((nome,i) => ({ nome, team:(S.teamOf[nome]||null), emoji:U.horseEmoji(i), cor:U.corOf(i), idx:i }));
     S.sim = App.Sim.simulate(seed, S.cavalos.length);
     Log.info('Race','corrida iniciada', { n:S.cavalos.length, seed, mode:S.mode, label, close:S.sim.close });
     App.Render.pista();
