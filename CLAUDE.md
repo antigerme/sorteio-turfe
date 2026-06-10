@@ -28,6 +28,8 @@ Há três modos:
   corrida, torneio, runtime). Só o **cadastro** (participantes, equipes, prêmio, semente,
   modo) é salvo no `localStorage` por **`App.Store`** e restaurado ao recarregar (a corrida/
   torneio/runtime continuam voláteis). Um link compartilhado tem prioridade sobre o rascunho.
+  As **preferências de UI** (tema, mudo/voz, volume) também ficam no `localStorage`, numa
+  chave própria via `App.Store.pref()`.
 - **Idioma**: produto e código (comentários, strings, nomes de função) estão em **português (pt-BR)**.
 
 ### Módulos (ordem de dependência no `<script>`)
@@ -40,10 +42,11 @@ Há três modos:
 | `App.Dom` (`D`) | Atalhos de DOM: `id`, `qsa`, `on`, `setText`, `setHTML` |
 | `App.RNG` | `mulberry32` + `shuffle` (base do sorteio justo) |
 | `App.State` (`S`) | Estado central mutável (lido/escrito pelos demais) |
-| `App.Store` | Persistência local (localStorage) do **cadastro**: salva/restaura participantes, equipes, prêmio, semente e modo |
+| `App.Store` | Persistência local (localStorage): **cadastro** (auto) + **preferências** de UI via `pref()` (tema, mudo/voz, volume) |
+| `App.View` | Chrome visual: **tema** claro/escuro (persistido) e **tela cheia** (apresentação) |
 | `App.Timing` | `seq`/`clearSeq` (timers agendados com try/catch) |
 | `App.Bus` | Event bus mínimo (`on`/`emit`) — desacopla reações |
-| `App.Audio` | Web Audio (sons sintetizados) + narração por voz |
+| `App.Audio` | Web Audio (sons sintetizados) + narração por voz + **volume/mudo** (nó `master`, persistidos) |
 | `App.Sim` | **Simulação determinística** (`simulate(seed, n)`) |
 | `App.Screens` | Troca de tela (`show(id)`) |
 | `App.Teams` | Equipes (criar/remover/cores/placar) |

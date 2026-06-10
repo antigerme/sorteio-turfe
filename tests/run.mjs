@@ -232,6 +232,20 @@ function testPersistence(App) {
   ok('save() com estado vazio esquece o rascunho (restore() = false)', App.Store.restore() === false);
 }
 
+/* ----------------------------------------------------------------------------
+ * 4) Preferências de UI (App.Store.pref + App.View/App.Audio) — round-trip
+ * -------------------------------------------------------------------------- */
+function testPrefs(App) {
+  section('Preferências de UI (tema/som/volume)');
+  if (!App.View || !App.Store.pref) { ok('App.View + App.Store.pref existem', false); return; }
+  App.View.setTheme('dark'); ok('tema persiste (dark)', App.Store.pref('theme') === 'dark');
+  App.View.setTheme('light'); ok('tema persiste (light)', App.Store.pref('theme') === 'light');
+  App.Audio.setVolume(0.3); ok('volume persiste e não fica mudo', App.Store.pref('vol') === 0.3 && App.Store.pref('muted') === false);
+  App.Audio.setVolume(0); ok('volume 0 = mudo', App.Store.pref('muted') === true);
+  let threw = false; try { App.Audio.loadPrefs(); App.View.initTheme(); } catch (e) { threw = true; }
+  ok('loadPrefs()/initTheme() rodam sem erro', !threw);
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
@@ -239,5 +253,6 @@ const App = loadApp();
 testDeterminism(App);
 testQR(App);
 testPersistence(App);
+testPrefs(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);
