@@ -79,6 +79,10 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - 🔗 **Link compartilhável** — no resultado, **"Copiar link"** gera uma URL que **reproduz o sorteio inteiro** (modo + participantes + semente) ao abrir; o apresentador só confere e clica em Iniciar.
 - 📱 **QR Code do link** — gere um QR na tela de resultado pra galera **escanear e abrir o sorteio no celular**. Gerado 100% no navegador (sem lib, offline) — nenhum dado sai dali.
 - 💾 **Não perde seu cadastro** — participantes, equipes, prêmio e semente ficam **salvos no navegador** e voltam ao recarregar a página (fechou sem querer? está tudo lá). Fica só no seu navegador; **🗑️ Limpar tudo** apaga.
+- 🌗 **Tema claro/escuro** — botão no canto que **lembra sua escolha** (e respeita o tema do sistema na 1ª visita).
+- 🖥️ **Modo apresentação** — botão de **tela cheia** pra projetar a corrida sem distrações.
+- 🔊 **Volume e mudo persistentes** — ajuste o som (ou silencie) no menu **🔊 Som**; a preferência fica salva.
+- 🔗 **Preview do link** — ao copiar o link compartilhável, ele aparece num campo pra você **conferir e recopiar**.
 - 🏆 **Pódio, estatísticas e classificação completa** (viradas de liderança, ultrapassagens, arrancadas).
 - 💾 **Exportar** o resultado em **PDF**, **certificado de vitória (PDF)** ou **imagem (PNG)**.
 - 👥 **Até 100 participantes**, com **colar lista** (um nome por linha; "Nome, Equipe" no modo equipes).

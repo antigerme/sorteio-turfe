@@ -21,7 +21,9 @@
   /* ===== RESET + TEMA ===== */
   * { box-sizing:border-box; margin:0; padding:0; }
   :root { --bg:#fff; --surface:#f5f4ef; --border:#e3e1d8; --tp:#2c2c2a; --ts:#6b6a64; --tt:#a3a299; --go:#1D9E75; --go-dark:#0F6E56; --danger:#E24B4A; --fire:#D85A30; }
-  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--tp); padding:24px 16px; min-height:100vh; }
+  body.dark { --bg:#15161a; --surface:#202128; --border:#34353e; --tp:#e9e8e3; --ts:#a7a69e; --tt:#74736b; --go:#27b487; --go-dark:#22a079; --danger:#e2615f; --fire:#e06a3f; }
+  body.dark .qr-card, body.dark .photo-card { color:#2c2c2a; } /* cartões claros (foto/QR) mantêm texto escuro */
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--tp); padding:24px 16px; min-height:100vh; transition:background .25s ease, color .25s ease; }
   #app { max-width:820px; margin:0 auto; }
   .screen { display:none; } .screen.active { display:block; }
   h2 { font-size:22px; font-weight:600; margin-bottom:6px; }
@@ -62,8 +64,12 @@
   #lista { min-height:50px; margin:16px 0; }
   .empty { font-size:13px; color:var(--tt); grid-column:1/-1; padding:8px 0; }
   details { margin-bottom:14px; } summary { font-size:13px; color:var(--ts); cursor:pointer; }
-  .bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:6px; }
-  .msg { font-size:13px; min-height:18px; } .count { font-size:13px; color:var(--ts); }
+  .bottom { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:6px; }
+  .count { font-size:13px; color:var(--ts); }
+  /* Toast global (feedback transitório) — fixo, visível em qualquer tela */
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px); max-width:90vw; background:var(--tp); color:var(--bg); padding:11px 18px; border-radius:10px; font-size:14px; font-weight:600; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.28); opacity:0; pointer-events:none; transition:opacity .22s ease, transform .22s ease; z-index:9999; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.err { background:var(--danger); color:#fff; }
 
   /* ===== CORRIDA (pista, cavalos) ===== */
   .race-head { margin-bottom:12px; }
@@ -151,6 +157,11 @@
   .full .ft { font-size:12px; color:var(--ts); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
   .full .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; } .full .row:last-child { border-bottom:none; } .full .row .p { width:30px; font-weight:600; }
   .seedline { font-size:13px; color:var(--ts); margin:14px 0; } .seedline code { background:var(--surface); padding:2px 8px; border-radius:6px; }
+  .seed-copy { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:var(--tp); background:var(--surface); border:1px solid var(--border); padding:2px 8px; border-radius:6px; cursor:pointer; transition:background .15s, border-color .15s; }
+  .seed-copy::after { content:" 📋"; font-size:11px; opacity:.65; }
+  .seed-copy:hover, .seed-copy:focus-visible { border-color:var(--go); background:var(--bg); color:var(--go-dark); outline:none; }
+  .linkprev { margin:-4px 0 14px; } .linkprev .lp-row { display:flex; gap:6px; align-items:center; max-width:520px; margin:0 auto; }
+  .lp-inp { flex:1; min-width:0; font-size:12px; font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--ts); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:7px 10px; }
   .acoes { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
   .savewrap { position:relative; display:inline-block; }
   .savemenu { display:none; position:absolute; bottom:48px; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.14); z-index:30; flex-direction:column; gap:6px; min-width:220px; }
@@ -161,12 +172,17 @@
 </head>
 <body>
 <!-- Menu de som (fixo, canto superior direito) -->
-<div id="soundWrap" style="position:fixed;top:12px;right:12px;z-index:60">
-  <button id="soundBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleSoundMenu">🔊 Som ▾</button>
-  <div id="soundMenu" style="display:none;position:absolute;top:44px;right:0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);flex-direction:column;gap:6px;min-width:185px">
-    <div style="font-size:12px;color:var(--ts);padding:2px 4px 4px">Sons</div>
-    <button class="btn btn-sm" id="optSfx" style="justify-content:flex-start;width:100%" data-action="toggleSfx">✓ 🔊 Ambiente</button>
-    <button class="btn btn-sm" id="optVoice" style="justify-content:flex-start;width:100%" data-action="toggleVoice">○ 🗣️ Narração</button>
+<div id="topControls" style="position:fixed;top:12px;right:12px;z-index:60;display:flex;gap:8px;align-items:flex-start">
+  <button id="themeBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleTheme" title="Tema escuro" aria-label="Alternar tema">🌙</button>
+  <button id="fsBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleFullscreen" title="Tela cheia (apresentação)" aria-label="Tela cheia">⛶</button>
+  <div id="soundWrap" style="position:relative">
+    <button id="soundBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleSoundMenu">🔊 Som ▾</button>
+    <div id="soundMenu" style="display:none;position:absolute;top:44px;right:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);flex-direction:column;gap:6px;min-width:200px">
+      <div style="font-size:12px;color:var(--ts);padding:2px 4px 4px">Sons</div>
+      <button class="btn btn-sm" id="optSfx" style="justify-content:flex-start;width:100%" data-action="toggleSfx">✓ 🔊 Ambiente</button>
+      <button class="btn btn-sm" id="optVoice" style="justify-content:flex-start;width:100%" data-action="toggleVoice">○ 🗣️ Narração</button>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 4px 2px;font-size:13px">🔈<input type="range" id="volSlider" min="0" max="100" value="100" aria-label="Volume" style="flex:1;cursor:pointer">🔊</div>
+    </div>
   </div>
 </div>
 
@@ -221,7 +237,6 @@
 
     <div class="grid" id="lista"></div>
     <div class="bottom">
-      <span class="msg" id="msg"></span>
       <div style="display:flex;align-items:center;gap:14px">
         <span class="count" id="count">0 participantes</span>
         <button class="btn btn-go" id="btnStart" data-action="iniciar" disabled>Iniciar corrida</button>
@@ -266,6 +281,7 @@
       <div class="stats" id="stats"></div>
       <div class="full" id="full"></div>
       <div class="seedline" id="seedline"></div>
+      <div class="linkprev" id="linkPreview" style="display:none"></div>
       <div class="acoes">
         <button class="btn btn-go" id="btnNova" data-action="novamente">🎲 Novo</button>
         <button class="btn" data-action="reprisar">↻ Reprisar</button>
@@ -529,7 +545,50 @@ App.Store = (function(){
   }
   function clear(){ const store = ls(); if (store) { try { store.removeItem(KEY); } catch (e) {} } }
   function arm(){ armed = true; }
-  return { save, restore, clear, arm, snapshot };
+  // --- Preferências de UI (tema, som, volume) — chave separada, sempre persistidas ---
+  const PKEY = 'sorteio-turfe:prefs:v1';
+  function prefs(){ const store = ls(); if (!store) return {}; try { const r = store.getItem(PKEY); return r ? JSON.parse(r) : {}; } catch (e) { return {}; } }
+  function pref(key, value){
+    if (arguments.length < 2) return prefs()[key];
+    const store = ls(); if (!store) return value;
+    try { const p = prefs(); p[key] = value; store.setItem(PKEY, JSON.stringify(p)); } catch (e) { Log.warn('Store','falha ao salvar pref', e); }
+    return value;
+  }
+  return { save, restore, clear, arm, snapshot, prefs, pref };
+})();
+
+/* ===================== View — tema (claro/escuro) + tela cheia ===================== */
+/* Chrome visual: alterna tema (persistido em App.Store.pref) e tela cheia (apresentação).
+   O tema inicial respeita a preferência salva ou, na 1ª visita, o prefers-color-scheme. */
+App.View = (function(){
+  function applyTheme(t){
+    const dark = t === 'dark';
+    try { document.body.classList.toggle('dark', dark); } catch (e) {}
+    const b = D.id('themeBtn'); if (b) { b.textContent = dark ? '☀️' : '🌙'; b.title = dark ? 'Tema claro' : 'Tema escuro'; }
+  }
+  function setTheme(t){ applyTheme(t); App.Store.pref('theme', t); Log.info('View','tema ' + t); }
+  function toggleTheme(){ setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'); }
+  function initTheme(){
+    let t = App.Store.pref('theme');
+    if (t !== 'dark' && t !== 'light') t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    applyTheme(t);
+  }
+  function fsEl(){ return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function toggleFullscreen(){
+    try {
+      const r = !fsEl()
+        ? (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement)
+        : (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      if (r && r.catch) r.catch(e => Log.warn('View','tela cheia negada', e)); // promise pode rejeitar
+    } catch (e) { Log.warn('View','tela cheia indisponível', e); }
+  }
+  function syncFs(){ const b = D.id('fsBtn'); if (b) { const on = !!fsEl(); b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Sair da tela cheia' : 'Tela cheia (apresentação)'; } }
+  function init(){
+    initTheme();
+    try { document.addEventListener('fullscreenchange', syncFs); document.addEventListener('webkitfullscreenchange', syncFs); } catch (e) {}
+    syncFs();
+  }
+  return { setTheme, toggleTheme, initTheme, toggleFullscreen, init };
 })();
 
 /* ===================== Timing — timers agendados ===================== */
@@ -563,26 +622,30 @@ App.Bus = (function(){
    após interação do usuário (políticas de autoplay). Estado de áudio fica
    encapsulado aqui (ctx, master, mudo, voz, torcida, batimento).            */
 App.Audio = (function(){
-  let ctx = null, master = null, muted = false, voiceOn = false, crowd = null, crowdGain = null, heartTimer = null;
+  let ctx = null, master = null, muted = false, voiceOn = false, volume = 1, crowd = null, crowdGain = null, heartTimer = null;
 
   // Garante o AudioContext + nó master. Retorna o ctx (ou null se indisponível).
   function ensure(){
     if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); Log.info('Audio','AudioContext criado'); } catch (e) { Log.warn('Audio','AudioContext indisponível', e); return null; } }
-    if (!master) { master = ctx.createGain(); master.gain.value = muted ? 0 : 1; master.connect(ctx.destination); }
+    if (!master) { master = ctx.createGain(); master.gain.value = muted ? 0 : volume; master.connect(ctx.destination); }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
 
   // Reflete o estado (mudo/voz) nos botões do menu de som.
   function applyState(){
-    if (master) master.gain.value = muted ? 0 : 1;
-    const a = D.id('optSfx'), v = D.id('optVoice'), b = D.id('soundBtn');
+    if (master) master.gain.value = muted ? 0 : volume;
+    const a = D.id('optSfx'), v = D.id('optVoice'), b = D.id('soundBtn'), sl = D.id('volSlider');
     if (a) a.textContent = (muted ? '○' : '✓') + ' 🔊 Ambiente';
     if (v) v.textContent = (voiceOn ? '✓' : '○') + ' 🗣️ Narração';
     if (b) b.textContent = ((!muted || voiceOn) ? '🔊' : '🔇') + ' Som ▾';
+    if (sl && document.activeElement !== sl) sl.value = Math.round(volume * 100);
   }
-  function toggleSfx(){ muted = !muted; Log.info('Audio','ambiente '+(muted?'OFF':'ON')); applyState(); }
-  function toggleVoice(){ voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); Log.info('Audio','narração '+(voiceOn?'ON':'OFF')); applyState(); }
+  function toggleSfx(){ muted = !muted; if (!muted && volume === 0) volume = .6; persist(); Log.info('Audio','ambiente '+(muted?'OFF':'ON')); applyState(); }
+  function toggleVoice(){ voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); persist(); Log.info('Audio','narração '+(voiceOn?'ON':'OFF')); applyState(); }
+  function setVolume(v){ volume = Math.max(0, Math.min(1, +v || 0)); muted = (volume === 0); persist(); applyState(); }
+  function persist(){ try { App.Store.pref('vol', volume); App.Store.pref('muted', muted); App.Store.pref('voice', voiceOn); } catch (e) {} }
+  function loadPrefs(){ try { const pv = App.Store.pref('vol'); if (typeof pv === 'number') volume = Math.max(0, Math.min(1, pv)); const pm = App.Store.pref('muted'); if (typeof pm === 'boolean') muted = pm; const po = App.Store.pref('voice'); if (typeof po === 'boolean') voiceOn = po; } catch (e) {} applyState(); }
   function toggleMenu(e){ if (e) e.stopPropagation(); const m = D.id('soundMenu'); m.style.display = m.style.display === 'flex' ? 'none' : 'flex'; }
   function closeMenu(){ const m = D.id('soundMenu'); if (m) m.style.display = 'none'; }
 
@@ -630,7 +693,7 @@ App.Audio = (function(){
   function stopHeart(){ if (heartTimer){ clearInterval(heartTimer); heartTimer=null; } }
 
   return {
-    ensure, applyState, toggleSfx, toggleVoice, toggleMenu, closeMenu,
+    ensure, applyState, toggleSfx, toggleVoice, setVolume, loadPrefs, toggleMenu, closeMenu,
     bugle, gun, bell, galope, applause, winnerFanfare, drumroll, cymbal, shutter, heartbeat,
     reactOhh, reactCheer, pop, click, say, beep,
     crowdStart, crowdSet, crowdStop, startHeart, stopHeart
@@ -746,7 +809,16 @@ App.Teams = (function(){
 App.Roster = (function(){
   const MAX = CFG.MAX;
   // Mensagem de feedback (linha #msg do cadastro). ok=true -> verde; senão vermelho.
-  function msg(t, ok){ const el = D.id('msg'); if (!el) return; el.textContent = t; el.style.color = ok ? 'var(--go-dark)' : 'var(--danger)'; }
+  // Toast global: feedback transitório visível em QUALQUER tela (o #toast é fixo, fora das .screen).
+  let toastTimer = null;
+  function msg(t, ok){
+    const el = D.id('toast'); if (!el) return;
+    el.textContent = t;
+    el.classList.toggle('err', ok === false);
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
+  }
   // Quebra um bloco de texto em nomes (vírgula/; /tab/linha) com limite de 40.
   function parseNames(t){ return t.split(/[\n,;\t]+/).map(s => s.trim().slice(0,40)).filter(Boolean); }
   function summary(add, dup, full){
@@ -1332,7 +1404,8 @@ App.Result = (function(){
     D.setHTML('stats', `<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>${S.sim.close?'<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>':''}`);
     D.setHTML('full', '<div class="ft">' + (isTour ? 'Classificação da final' : 'Classificação completa') + '</div>' + S.sim.order.map((idx,p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join(''));
     const seedShown = isTour ? S.tourBaseSeed : S.sim.seed;
-    D.setHTML('seedline', `Semente: <code>${seedShown}</code> <button class="btn btn-sm" data-action="copiarSemente" data-arg="${seedShown}">Copiar</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR</button> <span class="hint">— reproduza pela URL ou em "Opções avançadas"</span>`);
+    D.setHTML('seedline', `Semente: <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="Clique para copiar a semente">${seedShown}</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR</button> <span class="hint">— clique na semente para copiar; reproduza pela URL ou em "Opções avançadas"</span>`);
+    const lp = D.id('linkPreview'); if (lp) { lp.style.display = 'none'; lp.innerHTML = ''; } // limpa preview do resultado anterior
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
   // Copia a semente para a área de transferência.
@@ -1353,7 +1426,35 @@ App.Result = (function(){
     return base + '#' + q;
   }
   // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar).
-  async function copyLink(seed){ const url = await buildShareUrl(seed); try { await navigator.clipboard.writeText(url); App.Roster.msg('Link copiado!', true); Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') }); } catch (e) { App.Roster.msg('Link: ' + url, true); Log.warn('Result','clipboard indisponível', e); } }
+  // No sucesso: só o toast (com o tamanho). Se o clipboard estiver bloqueado, aí sim
+  // mostra o preview (campo selecionável) como fallback p/ copiar à mão.
+  async function copyLink(seed){
+    const url = await buildShareUrl(seed);
+    try {
+      await navigator.clipboard.writeText(url);
+      const box = D.id('linkPreview'); if (box) box.style.display = 'none';
+      App.Roster.msg(`Link copiado! (${url.length} caracteres${url.includes('#d=') ? ', comprimido' : ''})`, true);
+      Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') });
+    } catch (e) {
+      showLinkPreview(url);
+      App.Roster.msg('Não consegui copiar sozinho — selecione o link abaixo 👇', true);
+      Log.warn('Result','clipboard indisponível, preview exibido', e);
+    }
+  }
+  // Preview do link: campo readonly (clica = seleciona tudo) + nº de caracteres.
+  function showLinkPreview(url){
+    const box = D.id('linkPreview'); if (!box) return;
+    D.setHTML('linkPreview', `<div class="lp-row"><input id="linkPreviewInp" class="lp-inp" readonly value="${U.esc(url)}"><button class="btn btn-sm" data-action="copiarLinkPreview">📋 Copiar</button></div><div class="hint">${url.length} caracteres${url.includes('#d=') ? ' · comprimido' : ''} — clique no campo para selecionar tudo</div>`);
+    box.style.display = 'block';
+    const inp = D.id('linkPreviewInp'); if (inp) D.on(inp, 'focus', () => { try { inp.select(); } catch (e) {} });
+  }
+  // Recopia o link a partir do preview (clipboard ou seleção como fallback).
+  function copyLinkPreview(){
+    const inp = D.id('linkPreviewInp'); if (!inp) return;
+    try { inp.select(); } catch (e) {}
+    try { navigator.clipboard.writeText(inp.value); App.Roster.msg('Link copiado!', true); }
+    catch (e) { try { document.execCommand('copy'); App.Roster.msg('Link copiado!', true); } catch (e2) { App.Roster.msg('Selecione e copie (Ctrl/Cmd+C)', true); } }
+  }
   // QR Code do link, gerado 100% local (App.QR). Mostra num modal; se a lista
   // for grande demais para caber no QR, avisa p/ usar o "Copiar link".
   async function showQR(seed){
@@ -1366,7 +1467,7 @@ App.Result = (function(){
     } catch (e) { App.Roster.msg('Lista grande demais para o QR — use o "🔗 Copiar link".', false); Log.warn('Result','QR não gerado', e); }
   }
   function closeQR(){ const m = D.id('qrModal'); if (m) m.classList.remove('open'); }
-  return { reveal, build, copySeed, copyLink, showQR, closeQR, toggleSave, closeSave };
+  return { reveal, build, copySeed, copyLink, copyLinkPreview, showQR, closeQR, toggleSave, closeSave };
 })();
 
 /* ===================== Export — PDF / certificado / imagem ===================== */
@@ -1438,6 +1539,9 @@ App.UI = (function(){
     toggleSoundMenu: (el, e) => App.Audio.toggleMenu(e),
     toggleSfx:       () => App.Audio.toggleSfx(),
     toggleVoice:     () => App.Audio.toggleVoice(),
+    // visual (tema / tela cheia)
+    toggleTheme:      () => App.View.toggleTheme(),
+    toggleFullscreen: () => App.View.toggleFullscreen(),
     // cadastro / modos
     setMode:    (el) => App.Modes.set(el.dataset.mode),
     addOne:     () => App.Roster.addOne(),
@@ -1456,6 +1560,7 @@ App.UI = (function(){
     // resultado / exportações
     copiarSemente:   (el) => App.Result.copySeed(el.dataset.arg),
     copiarLink:      (el) => App.Result.copyLink(el.dataset.arg),
+    copiarLinkPreview: () => App.Result.copyLinkPreview(),
     mostrarQR:       (el) => App.Result.showQR(el.dataset.arg),
     fecharQR:        () => App.Result.closeQR(),
     toggleSalvar:    (el, e) => App.Result.toggleSave(e),
@@ -1530,6 +1635,10 @@ App.UI = (function(){
     D.on(D.id('seedInp'), 'input', () => App.Store.save());
     // Delegação global de cliques
     D.on(document, 'click', onClick);
+    // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
+    App.View.init();
+    D.on(D.id('volSlider'), 'input', e => App.Audio.setVolume(e.target.value / 100));
+    App.Audio.loadPrefs();
     // Vozes da narração (carregamento assíncrono em alguns navegadores)
     if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
     // Render inicial
@@ -1552,5 +1661,6 @@ App.UI = (function(){
   catch (e) { Log.error('App', 'falha na inicialização', e); }
 })();
 </script>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
