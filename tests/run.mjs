@@ -279,6 +279,20 @@ function testPalette(App) {
   ok('cores da PAL são bem distintas (dist. RGB mínima > 60)', minD > 60, 'min=' + minD.toFixed(0));
 }
 
+/* ----------------------------------------------------------------------------
+ * 7) Tom de pele do jóquei (variado e determinístico)
+ * -------------------------------------------------------------------------- */
+function testJockeyTone(App) {
+  section('Tom do jóquei (variado + determinístico)');
+  const U = App.Util, H = App.Config.HORSES, ji = H.indexOf('🏇');
+  if (ji < 0) { ok('🏇 existe em HORSES', false); return; }
+  ok('não-jóquei fica sem modificador', U.horseEmoji(ji === 0 ? 1 : 0) === H[ji === 0 ? 1 : 0]);
+  const j1 = U.horseEmoji(ji), j2 = U.horseEmoji(ji + H.length), j3 = U.horseEmoji(ji + 2 * H.length);
+  ok('jóquei recebe modificador de tom', j1 !== '🏇' && j1.startsWith('🏇') && [...j1].length === 2);
+  ok('jóqueis sucessivos têm tons diferentes', j1 !== j2 && j2 !== j3);
+  ok('determinístico (mesmo i ⇒ mesmo emoji)', U.horseEmoji(ji) === j1);
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
@@ -289,5 +303,6 @@ testPersistence(App);
 testPrefs(App);
 testA11yQr(App);
 testPalette(App);
+testJockeyTone(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);
