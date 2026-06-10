@@ -192,6 +192,7 @@
       <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
       <button class="btn btn-sm" data-action="limparTudo">🗑️ Limpar tudo</button>
     </div>
+    <div class="hint" id="persistHint">💾 Seu cadastro fica salvo <b>neste navegador</b> — recarregar não perde. Use 🗑️ Limpar tudo para apagar.</div>
 
     <div class="panel" id="teamsBox">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -480,6 +481,57 @@ App.State = {
 };
 const S = App.State;
 
+/* ===================== Store — persistência local do cadastro ===================== */
+/* Salva o cadastro (participantes, equipes, prêmio, semente, modo) no localStorage e o
+   restaura ao recarregar. AUTOMÁTICO: grava a cada mudança e restaura no boot — a menos
+   que a URL traga um sorteio compartilhado, que tem prioridade. Tudo fica só no navegador
+   (nada é enviado). Tolerante a localStorage ausente/bloqueado (degrada p/ no-op). */
+App.Store = (function(){
+  const KEY = 'sorteio-turfe:v1';
+  let armed = false; // só grava depois que o boot tentou restaurar (evita sobrescrever com vazio)
+
+  function ls(){ try { return (typeof localStorage !== 'undefined') ? localStorage : null; } catch (e) { return null; } }
+  function hasContent(d){ return !!d && (((d.participantes||[]).length) || ((d.teams||[]).length)); }
+  function snapshot(){
+    const pi = D.id('prizeInp'), si = D.id('seedInp');
+    return { v:1, participantes:S.participantes, teamOf:S.teamOf, teams:S.teams, teamColors:S.teamColors,
+             mode:S.mode, prize: pi ? pi.value : (S.prize||''), seed: si ? si.value.trim() : '' };
+  }
+  function save(){
+    if (!armed) return; const store = ls(); if (!store) return;
+    try {
+      const snap = snapshot();
+      if (hasContent(snap)) { store.setItem(KEY, JSON.stringify(snap)); Log.debug('Store','salvo', { participantes:snap.participantes.length, equipes:snap.teams.length }); }
+      else { store.removeItem(KEY); } // sem nada relevante -> esquece
+    } catch (e) { Log.warn('Store','falha ao salvar', e); }
+  }
+  function read(){
+    const store = ls(); if (!store) return null;
+    try { const raw = store.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch (e) { Log.warn('Store','falha ao ler', e); return null; }
+  }
+  function restore(){
+    const d = read(); if (!hasContent(d)) return false;
+    // Estado primeiro (funciona mesmo sem DOM, p/ testes); UI depois, tolerante a falha.
+    S.participantes = Array.isArray(d.participantes) ? d.participantes.slice() : [];
+    S.teamOf = (d.teamOf && typeof d.teamOf === 'object') ? d.teamOf : {};
+    S.teams = Array.isArray(d.teams) ? d.teams.slice() : [];
+    S.teamColors = (d.teamColors && typeof d.teamColors === 'object') ? d.teamColors : {};
+    S.mode = (d.mode === 'tournament' || d.mode === 'teams') ? d.mode : 'single';
+    try {
+      App.Modes.set(S.mode);
+      const pi = D.id('prizeInp'); if (pi) pi.value = (d.prize || '').slice(0,60);
+      const si = D.id('seedInp'); if (si && d.seed && /^\d+$/.test(d.seed)) { si.value = String(d.seed).slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; }
+      App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
+      App.Roster.msg('↩️ Cadastro restaurado deste navegador — confira, ou 🗑️ limpe.', true);
+    } catch (e) { Log.warn('Store','restauração de UI parcial', e); }
+    Log.info('Store','cadastro restaurado', { participantes:S.participantes.length, equipes:S.teams.length, modo:S.mode });
+    return true;
+  }
+  function clear(){ const store = ls(); if (store) { try { store.removeItem(KEY); } catch (e) {} } }
+  function arm(){ armed = true; }
+  return { save, restore, clear, arm, snapshot };
+})();
+
 /* ===================== Timing — timers agendados ===================== */
 /* seq(ms, fn): agenda e registra o timer (para poder cancelar tudo em massa).
    clearSeq(): cancela todos os timers agendados (usado ao reiniciar/limpar). */
@@ -660,7 +712,7 @@ App.Teams = (function(){
     const inp = D.id('newTeam'); const n = inp.value.trim().slice(0,24); if (!n) return;
     if (!S.teams.some(t => t.toLowerCase() === n.toLowerCase())) { S.teams.push(n); color(n); Log.info('Teams','equipe criada', { nome:n, total:S.teams.length }); }
     else Log.debug('Teams','equipe duplicada ignorada', { nome:n });
-    inp.value = ''; renderChips(); buildSelect();
+    inp.value = ''; renderChips(); buildSelect(); App.Store.save();
   }
   function remove(i){
     const t = S.teams[i]; S.teams.splice(i,1);
@@ -751,6 +803,7 @@ App.Roster = (function(){
   function clear(){ S.participantes = []; S.teamOf = {}; Log.info('Roster','lista limpa'); render(); msg('Lista limpa.', true); }
   // Desenha a lista de participantes + atualiza contador e botão "Iniciar".
   function render(){
+    App.Store.save(); // persiste o cadastro a cada mudança (no-op até o boot armar)
     const el = D.id('lista');
     D.setText('count', S.participantes.length + (S.participantes.length === 1 ? ' participante' : ' participantes'));
     const btn = D.id('btnStart'); if (btn) btn.disabled = S.participantes.length < 2;
@@ -1428,6 +1481,7 @@ App.UI = (function(){
   // Pré-preenche o sorteio a partir da URL (?modo=&seed=&n=&t=). NÃO inicia —
   // o apresentador confere e clica em Iniciar. Reusa Modes/Roster/Teams.
   async function applyUrlParams(){
+    let loaded = false;
     try {
       // Fonte da query: fragmento comprimido (#d=…), fragmento cru (#…) ou ?query (compat).
       const h = location.hash.slice(1);
@@ -1438,7 +1492,6 @@ App.UI = (function(){
       } else if (/[=&]/.test(h)) { q = h; }
       else { q = location.search.slice(1); }
       const p = new URLSearchParams(q || '');
-      let loaded = false;
       const modo = p.get('modo');
       if (modo && CFG.MODE_HINTS[modo]) { App.Modes.set(modo); loaded = true; }
       const names = p.getAll('n'), teams = p.getAll('t');
@@ -1461,12 +1514,20 @@ App.UI = (function(){
       if (prize) { D.id('prizeInp').value = prize.slice(0, 60); loaded = true; }
       if (loaded) { App.Roster.msg('Sorteio carregado do link — confira e clique em Iniciar ✓', true); Log.info('UI','sorteio carregado da URL', { modo:S.mode, participantes:S.participantes.length, seed }); }
     } catch (e) { Log.warn('UI','falha ao ler parâmetros da URL', e); }
+    finally {
+      // Sem sorteio na URL? restaura o rascunho salvo localmente (a URL tem prioridade).
+      try { if (!loaded) App.Store.restore(); } catch (e) { Log.warn('UI','restauração local falhou', e); }
+      App.Store.arm(); // a partir daqui, mudanças no cadastro são salvas automaticamente
+    }
   }
 
   function init(){
     // Enter nos campos de texto
     D.on(D.id('inp'), 'keydown', e => { if (e.key === 'Enter') App.Roster.addOne(); });
     D.on(D.id('newTeam'), 'keydown', e => { if (e.key === 'Enter') App.Teams.create(); });
+    // Persistência: salva o cadastro ao digitar prêmio/semente
+    D.on(D.id('prizeInp'), 'input', () => App.Store.save());
+    D.on(D.id('seedInp'), 'input', () => App.Store.save());
     // Delegação global de cliques
     D.on(document, 'click', onClick);
     // Vozes da narração (carregamento assíncrono em alguns navegadores)

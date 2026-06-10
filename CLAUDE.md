@@ -24,8 +24,10 @@ Há três modos:
   única. Para adicionar/remover/alterar algo, mexa só no módulo correspondente.
 - **Única dependência externa**: `jsPDF` via CDN (`cdnjs`), usada apenas para exportar
   PDF/certificado. Todo o resto é **vanilla JS**.
-- **Sem persistência**: o estado vive em memória, centralizado em **`App.State`**
-  (cadastro, corrida, torneio, runtime). Recarregar a página zera tudo.
+- **Estado em memória + cadastro persistido**: o estado vive em **`App.State`** (cadastro,
+  corrida, torneio, runtime). Só o **cadastro** (participantes, equipes, prêmio, semente,
+  modo) é salvo no `localStorage` por **`App.Store`** e restaurado ao recarregar (a corrida/
+  torneio/runtime continuam voláteis). Um link compartilhado tem prioridade sobre o rascunho.
 - **Idioma**: produto e código (comentários, strings, nomes de função) estão em **português (pt-BR)**.
 
 ### Módulos (ordem de dependência no `<script>`)
@@ -38,6 +40,7 @@ Há três modos:
 | `App.Dom` (`D`) | Atalhos de DOM: `id`, `qsa`, `on`, `setText`, `setHTML` |
 | `App.RNG` | `mulberry32` + `shuffle` (base do sorteio justo) |
 | `App.State` (`S`) | Estado central mutável (lido/escrito pelos demais) |
+| `App.Store` | Persistência local (localStorage) do **cadastro**: salva/restaura participantes, equipes, prêmio, semente e modo |
 | `App.Timing` | `seq`/`clearSeq` (timers agendados com try/catch) |
 | `App.Bus` | Event bus mínimo (`on`/`emit`) — desacopla reações |
 | `App.Audio` | Web Audio (sons sintetizados) + narração por voz |
