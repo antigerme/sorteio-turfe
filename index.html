@@ -157,6 +157,9 @@
   .full .ft { font-size:12px; color:var(--ts); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
   .full .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; } .full .row:last-child { border-bottom:none; } .full .row .p { width:30px; font-weight:600; }
   .seedline { font-size:13px; color:var(--ts); margin:14px 0; } .seedline code { background:var(--surface); padding:2px 8px; border-radius:6px; }
+  .seed-copy { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:var(--tp); background:var(--surface); border:1px solid var(--border); padding:2px 8px; border-radius:6px; cursor:pointer; transition:background .15s, border-color .15s; }
+  .seed-copy::after { content:" 📋"; font-size:11px; opacity:.65; }
+  .seed-copy:hover, .seed-copy:focus-visible { border-color:var(--go); background:var(--bg); color:var(--go-dark); outline:none; }
   .linkprev { margin:-4px 0 14px; } .linkprev .lp-row { display:flex; gap:6px; align-items:center; max-width:520px; margin:0 auto; }
   .lp-inp { flex:1; min-width:0; font-size:12px; font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--ts); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:7px 10px; }
   .acoes { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
@@ -1401,7 +1404,7 @@ App.Result = (function(){
     D.setHTML('stats', `<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>${S.sim.close?'<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>':''}`);
     D.setHTML('full', '<div class="ft">' + (isTour ? 'Classificação da final' : 'Classificação completa') + '</div>' + S.sim.order.map((idx,p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join(''));
     const seedShown = isTour ? S.tourBaseSeed : S.sim.seed;
-    D.setHTML('seedline', `Semente: <code>${seedShown}</code> <button class="btn btn-sm" data-action="copiarSemente" data-arg="${seedShown}">Copiar</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR</button> <span class="hint">— reproduza pela URL ou em "Opções avançadas"</span>`);
+    D.setHTML('seedline', `Semente: <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="Clique para copiar a semente">${seedShown}</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR</button> <span class="hint">— clique na semente para copiar; reproduza pela URL ou em "Opções avançadas"</span>`);
     const lp = D.id('linkPreview'); if (lp) { lp.style.display = 'none'; lp.innerHTML = ''; } // limpa preview do resultado anterior
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
