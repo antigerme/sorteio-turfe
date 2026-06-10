@@ -53,6 +53,8 @@ function loadApp() {
     devicePixelRatio: 1, innerWidth: 1280, innerHeight: 720,
   };
   sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
+  const _ls = new Map(); // stub de localStorage p/ exercitar App.Store
+  sandbox.localStorage = { getItem: k => _ls.has(String(k)) ? _ls.get(String(k)) : null, setItem: (k, v) => { _ls.set(String(k), String(v)); }, removeItem: k => { _ls.delete(String(k)); }, clear: () => _ls.clear(), key: i => [..._ls.keys()][i] ?? null, get length() { return _ls.size; } };
   if (typeof CompressionStream !== 'undefined') sandbox.CompressionStream = CompressionStream;
   if (typeof DecompressionStream !== 'undefined') sandbox.DecompressionStream = DecompressionStream;
 
@@ -205,11 +207,37 @@ function testQR(App) {
   ok('texto além da capacidade (v40) lança erro', threw);
 }
 
+/* ----------------------------------------------------------------------------
+ * 3) Persistência local (App.Store) — round-trip salvar/restaurar
+ * -------------------------------------------------------------------------- */
+function testPersistence(App) {
+  section('Persistência local (localStorage)');
+  if (!App.Store) { ok('App.Store existe', false); return; }
+  App.Store.arm(); // idempotente (o boot já arma); garante auto-save ligado
+  const S = App.State;
+  S.participantes = ['Ana', 'Bruno', 'Carla'];
+  S.teams = ['Verde', 'Azul']; S.teamColors = { Verde: '#0a0', Azul: '#00a' };
+  S.teamOf = { Ana: 'Verde', Bruno: 'Azul', Carla: 'Verde' }; S.mode = 'teams';
+  App.Store.save();
+  // zera o estado em memória (simula recarregar a página)
+  S.participantes = []; S.teams = []; S.teamColors = {}; S.teamOf = {}; S.mode = 'single';
+  const restored = App.Store.restore();
+  ok('restore() devolve true quando há rascunho salvo', restored === true);
+  ok('participantes restaurados', JSON.stringify(S.participantes) === JSON.stringify(['Ana', 'Bruno', 'Carla']));
+  ok('equipes + atribuições + modo restaurados', S.teams.length === 2 && S.teamOf.Ana === 'Verde' && S.mode === 'teams');
+  // "Limpar tudo": estado vazio -> save() esquece a chave
+  S.participantes = []; S.teams = []; S.teamOf = {};
+  App.Store.save();
+  S.participantes = ['Fantasma']; // muda algo p/ detectar restore indevido
+  ok('save() com estado vazio esquece o rascunho (restore() = false)', App.Store.restore() === false);
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
 const App = loadApp();
 testDeterminism(App);
 testQR(App);
+testPersistence(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);

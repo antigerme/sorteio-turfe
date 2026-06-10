@@ -78,6 +78,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - ⚖️ **Sorteio justo e reproduzível** — resultado 100% determinístico por **semente**: a mesma semente reproduz exatamente o mesmo sorteio (transparência total).
 - 🔗 **Link compartilhável** — no resultado, **"Copiar link"** gera uma URL que **reproduz o sorteio inteiro** (modo + participantes + semente) ao abrir; o apresentador só confere e clica em Iniciar.
 - 📱 **QR Code do link** — gere um QR na tela de resultado pra galera **escanear e abrir o sorteio no celular**. Gerado 100% no navegador (sem lib, offline) — nenhum dado sai dali.
+- 💾 **Não perde seu cadastro** — participantes, equipes, prêmio e semente ficam **salvos no navegador** e voltam ao recarregar a página (fechou sem querer? está tudo lá). Fica só no seu navegador; **🗑️ Limpar tudo** apaga.
 - 🏆 **Pódio, estatísticas e classificação completa** (viradas de liderança, ultrapassagens, arrancadas).
 - 💾 **Exportar** o resultado em **PDF**, **certificado de vitória (PDF)** ou **imagem (PNG)**.
 - 👥 **Até 100 participantes**, com **colar lista** (um nome por linha; "Nome, Equipe" no modo equipes).
