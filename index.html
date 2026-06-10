@@ -85,7 +85,7 @@
   .pista.reta { background:#ecd9bd; }
   .raia { position:relative; display:flex; align-items:center; border-bottom:1px dashed rgba(0,0,0,.08); transition:background .4s; }
   .raia:last-child { border-bottom:none; }
-  .raia-n { width:26px; text-align:center; font-size:10px; color:#7c6f57; flex-shrink:0; }
+  .raia-n { width:30px; text-align:center; font-size:12px; font-weight:700; color:#4a4034; flex-shrink:0; } /* nº da baia: identificador legível à prova de daltonismo */
   .track { flex:1; position:relative; height:100%; margin-right:8px; background-image:linear-gradient(90deg,transparent 24.7%,rgba(0,0,0,.06) 25%,transparent 25.3%,transparent 49.7%,rgba(0,0,0,.06) 50%,transparent 50.3%,transparent 74.7%,rgba(0,0,0,.06) 75%,transparent 75.3%); }
   .mud { position:absolute; top:8%; bottom:8%; width:18px; background:rgba(90,60,30,.28); border-radius:4px; }
   .finish { position:absolute; right:0; top:3px; bottom:3px; width:5px; background:repeating-linear-gradient(45deg,#2c2c2a 0,#2c2c2a 4px,#fff 4px,#fff 8px); border-radius:2px; }
@@ -362,8 +362,8 @@ App.Config = {
   MAX: 100,                 // limite de participantes
   MAXHEAT: 6,               // máx. de participantes por bateria (torneio)
   HORSES: ['🐎','🦄','🐴'], // emojis dos cavalos (ciclados por índice)
-  PAL: ['#534AB7','#D85A30','#1D9E75','#D4537E','#BA7517','#185FA5','#639922','#993C1D','#3C3489','#993556','#0F6E56','#A32D2D','#185FA5','#D4537E','#639922','#534AB7'],
-  TEAMPAL: ['#534AB7','#D85A30','#185FA5','#1D9E75','#D4537E','#BA7517','#993C1D','#3C3489'],
+  PAL: ['#0072B2','#D55E00','#785EF0','#009E73','#CC79A7','#3A3A3A','#56B4E9','#9B1D5E','#E69F00','#117733'], // paleta segura p/ daltonismo (Okabe-Ito + extras); ordem intercala frio/quente p/ baias vizinhas distintas
+  TEAMPAL: ['#0072B2','#D55E00','#117733','#AA3377','#785EF0','#3A3A3A','#009E73','#8A5A00'], // equipes: tons escuros (texto branco) e distinguíveis em daltonismo
   MODE_HINTS: {
     single:'Uma corrida única decide o ganhador.',
     tournament:'Os participantes são divididos em eliminatórias; os vencedores avançam até a grande final.',
@@ -447,7 +447,7 @@ App.Util = (function(){
   // Escolha aleatória NÃO determinística — usada só na estética (narração).
   const rndPick = a => a[(Math.random() * a.length) | 0];
   // Cor de um cavalo por índice (paleta fixa; gera HSL além do tamanho dela).
-  const corOf = i => i < CFG.PAL.length ? CFG.PAL[i] : `hsl(${(i*47)%360},62%,42%)`;
+  const corOf = i => i < CFG.PAL.length ? CFG.PAL[i] : `hsl(${(i*47)%360},60%,${i%2?40:30}%)`; // além da paleta: alterna claridade (ajuda em daltonismo)
   // base64url <-> bytes (URL-safe; sem '=').
   const b64url = u8 => btoa(String.fromCharCode.apply(null, u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const unb64url = s => { const bin = atob(s.replace(/-/g,'+').replace(/_/g,'/')); const u = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u; };

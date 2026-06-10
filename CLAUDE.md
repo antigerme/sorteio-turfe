@@ -129,11 +129,14 @@ por causa das políticas de autoplay dos navegadores. Não há lint/build; os te
   `App.View.announce()` (região `#srLive` `aria-live`). Com **`prefers-reduced-motion`**,
   `App.View.reducedMotion()` faz a corrida **pular a animação e ir direto ao resultado**
   (`App.Race.runFast()` + revelação sem suspense/confete); o CSS também zera transições/animações.
+  Para **daltonismo**, a paleta é segura (Okabe-Ito) e — como cores quentes convergem no
+  vermelho-verde — o **número da baia** (`.raia-n`, reforçado) e o **nome** são os identificadores
+  que não dependem de cor.
 
 ## Parâmetros (tudo em `App.Config`)
 
 - `MAX = 100` — limite de participantes; `MAXHEAT = 6` — máx. por bateria.
-- `HORSES`, `PAL`, `TEAMPAL`, `APPNAME`, `MODE_HINTS`.
+- `HORSES`, `PAL`, `TEAMPAL` (paletas **seguras p/ daltonismo** — Okabe-Ito; ordem intercala frio/quente), `APPNAME`, `MODE_HINTS`.
 - `Config.sim` — parâmetros da simulação (FIM, STEP, probabilidades, multiplicadores…).
   **Mexer aqui muda o resultado da corrida; revalide o determinismo.**
 - `Config.timing`, `Config.crowd`, `Config.photo` — tempos, volumes da torcida e a foto.

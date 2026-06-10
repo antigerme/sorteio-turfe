@@ -262,6 +262,23 @@ function testA11yQr(App) {
   ok('SVG tem 1 retângulo por módulo escuro (+ fundo)', rects === dark + 1, `${rects} rects vs ${dark} módulos`);
 }
 
+/* ----------------------------------------------------------------------------
+ * 6) Paleta segura para daltonismo (CFG.PAL / CFG.TEAMPAL)
+ * -------------------------------------------------------------------------- */
+function testPalette(App) {
+  section('Paleta segura para daltonismo');
+  const PAL = App.Config.PAL, TEAM = App.Config.TEAMPAL;
+  const hexOk = a => Array.isArray(a) && a.every(c => /^#[0-9A-Fa-f]{6}$/.test(c));
+  const uniq = a => new Set(a.map(c => c.toLowerCase())).size === a.length;
+  ok('PAL: ≥8 cores, hex válido e sem repetição', PAL.length >= 8 && hexOk(PAL) && uniq(PAL), PAL.length + ' cores');
+  ok('TEAMPAL: hex válido e sem repetição', hexOk(TEAM) && uniq(TEAM), TEAM.length + ' cores');
+  // distância mínima em RGB pega quase-duplicatas (cores que colidiriam fácil)
+  const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const dist = (a, b) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+  let minD = Infinity; for (let i = 0; i < PAL.length; i++) for (let j = i + 1; j < PAL.length; j++) minD = Math.min(minD, dist(PAL[i], PAL[j]));
+  ok('cores da PAL são bem distintas (dist. RGB mínima > 60)', minD > 60, 'min=' + minD.toFixed(0));
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
@@ -271,5 +288,6 @@ testQR(App);
 testPersistence(App);
 testPrefs(App);
 testA11yQr(App);
+testPalette(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);
