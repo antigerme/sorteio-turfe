@@ -64,7 +64,10 @@
   .histacts { display:flex; gap:6px; flex-shrink:0; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; }
   .chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:14px; }
-  .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; border-radius:4px; padding:1px 4px; margin:-1px -4px; }
+  .chip .n:hover { background:var(--bg); }
+  .chip[draggable] { cursor:grab; } .chip.dragging { opacity:.45; }
+  .chip-edit { flex:1; min-width:0; font-size:14px; font-family:inherit; border:1px solid var(--go); border-radius:6px; padding:3px 7px; background:var(--bg); color:var(--tp); outline:none; }
   .chip .x { cursor:pointer; color:var(--tt); font-size:20px; line-height:1; border:none; background:none; padding:0 2px; } .chip .x:hover { color:var(--danger); }
   .teamtag { font-size:9px; color:#fff; border-radius:4px; padding:1px 6px; }
   #lista { min-height:50px; margin:16px 0; }
@@ -246,7 +249,12 @@
     </div>
 
     <label class="fld">🏆 Prêmio em disputa (opcional)</label>
-    <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio em disputa">
+    <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio do 1º lugar">
+    <div id="prizesExtra" style="display:none;margin-top:8px">
+      <input type="text" id="prizeInp2" placeholder="Prêmio do 2º lugar (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="Prêmio do 2º lugar">
+      <input type="text" id="prizeInp3" placeholder="Prêmio do 3º lugar (opcional)" maxlength="60" style="width:100%" aria-label="Prêmio do 3º lugar">
+    </div>
+    <button class="btn btn-sm" id="prizesToggle" data-action="togglePrizes" style="margin-top:6px">➕ Prêmios para 2º e 3º lugar</button>
 
     <details id="advOpts">
       <summary>Opções avançadas — sorteio justo</summary>
@@ -295,6 +303,7 @@
       <h2 id="resTitle">🏆 Resultado do sorteio</h2>
       <p class="sub" id="resSub"></p>
       <div class="prizeline" id="prizeline"></div>
+      <div class="seedline" id="drawnLine"></div>
       <div class="podio" id="podio"></div>
       <div id="teamStandings"></div>
       <div id="bracketBox"></div>
@@ -304,6 +313,7 @@
       <div class="linkprev" id="linkPreview" style="display:none"></div>
       <div class="acoes">
         <button class="btn btn-go" id="btnNova" data-action="novamente">🎲 Novo</button>
+        <button class="btn" id="btnProximo" data-action="proximo" style="display:none">🏅 Tirar vencedor e sortear de novo</button>
         <button class="btn" data-action="reprisar">↻ Reprisar</button>
         <button class="btn" data-action="editar">Editar participantes</button>
         <div class="savewrap" id="saveWrap">
@@ -507,10 +517,13 @@ App.State = {
   teamOf: {},          // nome -> equipe
   teams: [],           // string[]  (equipes)
   teamColors: {},      // equipe -> cor
-  prize: '',           // prêmio em disputa
+  prize: '',           // prêmio do 1º lugar (compat); ver `prizes`
+  prizes: [],          // prêmios por posição [1º, 2º, 3º]
   mode: 'single',      // 'single' | 'tournament' | 'teams'
   // --- Corrida atual ---
   cavalos: [],         // [{nome, team, emoji, cor, idx}]
+  drawn: [],           // sorteio sequencial: vencedores já retirados nesta rodada
+  editing: null,       // índice do participante em edição inline (ou null)
   sim: null,           // resultado de Sim.simulate (frames/eventos/ordem...)
   lastSeed: null,      // última semente (para "Reprisar")
   positions: [],       // posições do frame atual (render/narração leem daqui)
@@ -537,7 +550,9 @@ App.Store = (function(){
   function snapshot(){
     const pi = D.id('prizeInp'), si = D.id('seedInp');
     return { v:1, participantes:S.participantes, teamOf:S.teamOf, teams:S.teams, teamColors:S.teamColors,
-             mode:S.mode, prize: pi ? pi.value : (S.prize||''), seed: si ? si.value.trim() : '' };
+             mode:S.mode, prize: pi ? pi.value : (S.prize||''),
+             prize2: (D.id('prizeInp2')||{}).value || '', prize3: (D.id('prizeInp3')||{}).value || '',
+             seed: si ? si.value.trim() : '' };
   }
   function save(){
     if (!armed) return; const store = ls(); if (!store) return;
@@ -562,6 +577,9 @@ App.Store = (function(){
     try {
       App.Modes.set(S.mode);
       const pi = D.id('prizeInp'); if (pi) pi.value = (d.prize || '').slice(0,60);
+      const p2 = D.id('prizeInp2'); if (p2) p2.value = (d.prize2 || '').slice(0,60);
+      const p3 = D.id('prizeInp3'); if (p3) p3.value = (d.prize3 || '').slice(0,60);
+      if (d.prize2 || d.prize3) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
       const si = D.id('seedInp'); if (si && d.seed && /^\d+$/.test(d.seed)) { si.value = String(d.seed).slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; }
       App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
       App.Roster.msg('↩️ Cadastro restaurado deste navegador — confira, ou 🗑️ limpe.', true);
@@ -878,7 +896,7 @@ App.Teams = (function(){
     renderChips(); buildSelect(); App.Roster.render();
   }
   function renderChips(){
-    const el = D.id('teamChips');
+    const el = D.id('teamChips'); if (!el) return;
     if (!S.teams.length) { el.innerHTML = '<div class="empty">Nenhuma equipe criada ainda.</div>'; return; }
     el.innerHTML = S.teams.map((t,i) => `<div class="chip"><span class="teamtag" style="background:${color(t)}">&nbsp;</span><span class="n">${U.esc(t)}</span><button class="x" data-action="removerEquipe" data-idx="${i}">&times;</button></div>`).join('');
   }
@@ -973,13 +991,28 @@ App.Roster = (function(){
     const el = D.id('lista');
     D.setText('count', S.participantes.length + (S.participantes.length === 1 ? ' participante' : ' participantes'));
     const btn = D.id('btnStart'); if (btn) btn.disabled = S.participantes.length < 2;
-    if (!S.participantes.length) { el.innerHTML = '<div class="empty">Nenhum participante ainda. Adicione pelo menos 2 para começar.</div>'; return; }
+    if (!el) return; // sem DOM (ex.: testes em vm)
+    if (!S.participantes.length) { el.innerHTML = '<div class="empty">Nenhum participante ainda. Adicione pelo menos 2 para começar.</div>'; S.editing = null; return; }
     el.innerHTML = S.participantes.map((n,i) => {
       const tg = (S.mode === 'teams' && S.teamOf[n]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[n])}">${U.esc(S.teamOf[n])}</span>` : '';
-      return `<div class="chip"><span class="e">🙂</span><span class="n">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      if (i === S.editing) return `<div class="chip editing"><span class="e">🙂</span><input class="chip-edit" data-idx="${i}" value="${U.esc(n)}" maxlength="40" aria-label="Editar nome"><button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      return `<div class="chip" draggable="true" data-idx="${i}"><span class="e">🙂</span><span class="n" data-action="editarNome" data-idx="${i}" title="Clique para editar; arraste o chip para reordenar">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
     }).join('');
+    if (S.editing != null) { const inp = el.querySelector('.chip-edit'); if (inp) { inp.focus(); try { inp.select(); } catch (e) {} D.on(inp, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(inp); } else if (e.key === 'Escape') { S.editing = null; render(); } }); D.on(inp, 'blur', () => commitEdit(inp)); } }
   }
-  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render };
+  // Edição inline do nome (clique no nome → input; Enter/blur salva, Esc cancela).
+  function startEdit(i){ if (i < 0 || i >= S.participantes.length) return; S.editing = i; render(); }
+  function commitEdit(inp){
+    if (S.editing == null || !inp) return;
+    const i = +inp.dataset.idx, old = S.participantes[i]; if (old == null) { S.editing = null; render(); return; }
+    const nv = inp.value.trim().slice(0, 40); S.editing = null;
+    if (nv && nv.toLowerCase() !== old.toLowerCase() && S.participantes.some((p,j) => j !== i && p.toLowerCase() === nv.toLowerCase())) { msg('Já existe "' + nv + '" na lista.', false); render(); return; }
+    if (nv && nv !== old) { S.participantes[i] = nv; if (S.teamOf[old] != null) { S.teamOf[nv] = S.teamOf[old]; delete S.teamOf[old]; } Log.info('Roster','nome editado', { de:old, para:nv }); }
+    render();
+  }
+  // Reordenar por arrastar (drag-and-drop): move o participante `from` para a posição `to`.
+  function reorder(from, to){ if (from === to || from < 0 || to < 0 || from >= S.participantes.length || to >= S.participantes.length) return; const [m] = S.participantes.splice(from, 1); S.participantes.splice(to, 0, m); Log.info('Roster','reordenado', { from, to }); render(); }
+  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render, startEdit, reorder };
 })();
 
 /* ===================== Modes — alterna o modo de sorteio ===================== */
@@ -1211,7 +1244,8 @@ App.Race = (function(){
   // Roda uma corrida com os nomes/semente/rótulo dados.
   function run(names, seed, label){
     App.Audio.ensure(); clearAll();
-    S.prize = D.id('prizeInp').value.trim();
+    S.prizes = ['prizeInp','prizeInp2','prizeInp3'].map(id => { const el = D.id(id); return el ? el.value.trim().slice(0,60) : ''; });
+    S.prize = S.prizes[0] || '';
     // Sprite NÃO depende da ordem do cadastro: é sorteado pela semente (reproduzível pelo link;
     // RNG separado da simulação) e só aparece na largada — ninguém "escolhe" quem pega o quê.
     const sprites = App.RNG.shuffle(names.map((_, i) => U.horseEmoji(i)), App.RNG.mulberry32(seed >>> 0));
@@ -1223,7 +1257,8 @@ App.Race = (function(){
     D.setText('racelabel', label || '');
     setHeader('Preparando...', false);
     const showPrize = (S.mode !== 'tournament') || (S.tour && S.tour.isFinal);
-    D.setText('raceprize', (S.prize && showPrize) ? ('🏆 Em disputa: ' + S.prize) : '');
+    const emDisputa = (S.prizes || []).filter(Boolean).join(' · ');
+    D.setText('raceprize', (emDisputa && showPrize) ? ('🏆 Em disputa: ' + emDisputa) : '');
     const nv = D.id('narr'); nv.classList.remove('fire'); nv.textContent = 'Cavalos a postos na linha de largada...';
     D.id('pista').classList.remove('reta');
     if (App.View.reducedMotion()) return runFast(); // respeita prefers-reduced-motion
@@ -1311,13 +1346,23 @@ App.Race = (function(){
   }
 
   // ---- Controles (chamados pelo UI) ----
-  function iniciar(){ if (S.mode === 'tournament') { App.Tournament.start(chosenSeed(false)); } else { S.lastSeed = chosenSeed(false); run(S.participantes, S.lastSeed, S.mode==='teams'?'👥 Corrida por equipes':''); } }
-  function novamente(){ if (S.mode === 'tournament') { App.Tournament.start(chosenSeed(true)); } else { S.lastSeed = chosenSeed(true); run(S.participantes, S.lastSeed, S.mode==='teams'?'👥 Corrida por equipes':''); } }
+  const teamLabel = () => S.mode === 'teams' ? '👥 Corrida por equipes' : '';
+  function iniciar(){ S.drawn = []; if (S.mode === 'tournament') { App.Tournament.start(chosenSeed(false)); } else { S.lastSeed = chosenSeed(false); run(S.participantes, S.lastSeed, teamLabel()); } }
+  function novamente(){ S.drawn = []; if (S.mode === 'tournament') { App.Tournament.start(chosenSeed(true)); } else { S.lastSeed = chosenSeed(true); run(S.participantes, S.lastSeed, teamLabel()); } }
+  // Sequencial: tira o vencedor da lista e sorteia de novo com os restantes (novo sorteio aleatório).
+  function proximo(){
+    if (!S.sim || !S.cavalos.length) return;
+    const w = S.cavalos[S.sim.order[0]].nome;
+    S.drawn.push(w);
+    const i = S.participantes.indexOf(w); if (i >= 0) { S.participantes.splice(i, 1); delete S.teamOf[w]; }
+    if (S.participantes.length < 2) { App.Roster.msg('🏁 Sequência encerrada — ' + S.drawn.length + ' sorteado(s).', true); App.Screens.show('screen-cadastro'); App.Teams.renderChips(); App.Roster.render(); return; }
+    S.lastSeed = chosenSeed(true); run(S.participantes, S.lastSeed, teamLabel());
+  }
   function reprisar(){ if (S.lastSeed == null) return; if (S.mode === 'tournament') { App.Tournament.start(S.lastSeed); } else { run(S.participantes, S.lastSeed, S.mode==='teams'?'👥 Corrida por equipes':''); } }
   // Volta ao cadastro a partir do resultado.
   function editar(){ clearAll(); S.tour = null; App.Screens.show('screen-cadastro'); Log.info('Race','voltou ao cadastro'); }
 
-  return { run, clearAll, setHeader, hideCD, iniciar, novamente, reprisar, editar };
+  return { run, clearAll, setHeader, hideCD, iniciar, novamente, reprisar, proximo, editar };
 })();
 
 /* ===================== Tournament — baterias e chaveamento ===================== */
@@ -1524,7 +1569,11 @@ App.Result = (function(){
     const v = S.cavalos[S.sim.order[0]], isTour = (S.mode === 'tournament');
     D.setText('resTitle', isTour ? '🏆 Campeão do torneio' : '🏆 Resultado do sorteio');
     D.setText('resSub', isTour ? 'Grande final do torneio' : `Corrida com ${S.cavalos.length} participantes`);
-    D.setText('prizeline', S.prize ? ('🏆 ' + v.nome + ' leva: ' + S.prize) : '');
+    const medals = ['🥇','🥈','🥉'];
+    const plines = (S.prizes || []).map((pr, i) => { if (!pr) return ''; const c = S.cavalos[S.sim.order[i]]; return c ? `${medals[i]} ${U.esc(c.nome)} leva: <b>${U.esc(pr)}</b>` : ''; }).filter(Boolean);
+    D.setHTML('prizeline', plines.join('<br>'));
+    D.setText('drawnLine', S.drawn.length ? ('🏅 Já sorteados nesta rodada: ' + S.drawn.join(', ')) : '');
+    const bp = D.id('btnProximo'); if (bp) bp.style.display = (!isTour && S.participantes.length >= 3) ? '' : 'none';
     D.setHTML('podio', `<div class="vcard"><div class="ve">${v.emoji}</div><div class="vn">${U.esc(v.nome)}</div><div class="vl">${isTour?'Campeão':'Vencedor'}</div></div><div class="outros">${S.sim.order.slice(1,3).map((idx,i) => { const c = S.cavalos[idx]; return `<div class="mini">${['🥈','🥉'][i]} <span>${c.emoji}</span> ${U.esc(c.nome)}</div>`; }).join('')}</div>`);
     D.setHTML('teamStandings', (S.mode === 'teams') ? App.Teams.standingsHtml() : '');
     D.setHTML('bracketBox', isTour ? ('<div class="bk-round" style="max-width:560px;margin:0 auto"><div class="rh" style="text-align:center">Caminho até o título</div></div>' + App.Tournament.bracketHtml()) : '');
@@ -1547,7 +1596,7 @@ App.Result = (function(){
     const base = location.href.split(/[?#]/)[0];
     const p = new URLSearchParams();
     p.set('modo', S.mode); p.set('seed', seed);
-    if (S.prize) p.set('p', S.prize);
+    (S.prizes && S.prizes.length ? S.prizes : [S.prize]).filter(Boolean).forEach(pr => p.append('p', pr));
     S.participantes.forEach(n => { p.append('n', n); if (S.mode === 'teams') p.append('t', S.teamOf[n] || ''); });
     const q = p.toString();
     if (U.supportsCompression()) { try { return base + '#d=' + await U.deflateB64url(q); } catch (e) { Log.warn('Result','compressão falhou; link sem compressão', e); } }
@@ -1683,17 +1732,20 @@ App.UI = (function(){
     addBulk:    () => App.Roster.addBulk(),
     limparTudo: () => App.Roster.clear(),
     togglePanel:(el) => togglePanel(el.dataset.arg),
+    togglePrizes: () => { const e = D.id('prizesExtra'); if (!e) return; const open = e.style.display !== 'none'; e.style.display = open ? 'none' : 'block'; const b = D.id('prizesToggle'); if (b) b.textContent = open ? '➕ Prêmios para 2º e 3º lugar' : '➖ Esconder 2º e 3º lugar'; },
     abrirHist:  () => App.History.open(),
     fecharHist: () => App.History.close(),
     reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
     removerHist:(el) => App.History.remove(+el.dataset.idx),
     limparHist: () => App.History.clear(),
     removerP:   (el) => App.Roster.remove(+el.dataset.idx),
+    editarNome: (el) => App.Roster.startEdit(+el.dataset.idx),
     criarEquipe:() => App.Teams.create(),
     removerEquipe:(el) => App.Teams.remove(+el.dataset.idx),
     // corrida / torneio
     iniciar:          () => App.Race.iniciar(),
     novamente:        () => App.Race.novamente(),
+    proximo:          () => App.Race.proximo(),
     reprisar:         () => App.Race.reprisar(),
     editar:           () => App.Race.editar(),
     continuarTorneio: () => App.Tournament.continuar(),
@@ -1758,8 +1810,12 @@ App.UI = (function(){
       }
       const seed = (p.get('seed') || p.get('semente') || '').trim();
       if (/^\d+$/.test(seed)) { D.id('seedInp').value = seed.slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
-      const prize = (p.get('p') || '').trim();
-      if (prize) { D.id('prizeInp').value = prize.slice(0, 60); loaded = true; }
+      const prizes = p.getAll('p').map(s => s.trim()).filter(Boolean);
+      if (prizes.length) {
+        ['prizeInp','prizeInp2','prizeInp3'].forEach((id, i) => { const el = D.id(id); if (el && prizes[i]) el.value = prizes[i].slice(0, 60); });
+        if (prizes.length > 1) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
+        loaded = true;
+      }
       if (loaded) { App.Roster.msg('Sorteio carregado do link — confira e clique em Iniciar ✓', true); Log.info('UI','sorteio carregado da URL', { modo:S.mode, participantes:S.participantes.length, seed }); }
     } catch (e) { Log.warn('UI','falha ao ler parâmetros da URL', e); }
     finally {
@@ -1775,9 +1831,17 @@ App.UI = (function(){
     D.on(D.id('newTeam'), 'keydown', e => { if (e.key === 'Enter') App.Teams.create(); });
     // Persistência: salva o cadastro ao digitar prêmio/semente
     D.on(D.id('prizeInp'), 'input', () => App.Store.save());
+    D.on(D.id('prizeInp2'), 'input', () => App.Store.save());
+    D.on(D.id('prizeInp3'), 'input', () => App.Store.save());
     D.on(D.id('seedInp'), 'input', () => App.Store.save());
     // Delegação global de cliques
     D.on(document, 'click', onClick);
+    // Reordenar participantes arrastando (drag-and-drop), delegado no #lista
+    const lista = D.id('lista'); let dragSrc = null;
+    D.on(lista, 'dragstart', e => { const c = e.target.closest('.chip[draggable]'); if (!c) return; dragSrc = +c.dataset.idx; if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(dragSrc)); } catch (_) {} } c.classList.add('dragging'); });
+    D.on(lista, 'dragover', e => { if (dragSrc != null) e.preventDefault(); });
+    D.on(lista, 'drop', e => { e.preventDefault(); const c = e.target.closest('.chip'); if (!c || dragSrc == null || c.dataset.idx == null) { dragSrc = null; return; } App.Roster.reorder(dragSrc, +c.dataset.idx); dragSrc = null; });
+    D.on(lista, 'dragend', () => { const d = lista && lista.querySelector('.dragging'); if (d) d.classList.remove('dragging'); dragSrc = null; });
     // Teclado global: Esc fecha o modal do QR e os menus abertos
     D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
