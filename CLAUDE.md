@@ -109,6 +109,11 @@ por causa das políticas de autoplay dos navegadores. Não há lint/build; os te
 - **Separação simulação ↔ render**: o resultado vem de `App.Sim`; o desenho fica em
   `App.Render` (`pista`/`frameAt`/`updateRanks`). Mudou o resultado? vá na simulação.
   Mudou o visual? vá na renderização.
+- **Sprite por sorteio (não pela ordem)**: o "bicho" de cada participante (`CFG.HORSES`) é
+  **embaralhado pela semente** em `App.Race.run` (`App.RNG.shuffle(..., mulberry32(seed))`,
+  RNG separado da simulação) e só aparece na **largada** — assim ninguém "escolhe" o sprite
+  pela ordem do cadastro. É reproduzível pelo link (mesma semente = mesmos sprites). No
+  cadastro, os chips mostram um 🙂 neutro (placeholder, sem revelar nada).
 - **Eventos via Bus**: `App.Sim` gera eventos `trip`/`mud`/`burst`/`lead`/`split`. Durante
   o playback, `App.Race` faz `App.Bus.emit('race:event', …)` e `App.Narration` reage
   (narra + som). Para somar uma reação nova, basta `App.Bus.on('race:event', …)`.
