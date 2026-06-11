@@ -293,6 +293,32 @@ function testJockeyTone(App) {
   ok('determinístico (mesmo i ⇒ mesmo emoji)', U.horseEmoji(ji) === j1);
 }
 
+/* ----------------------------------------------------------------------------
+ * 8) Histórico de sorteios (App.History + App.Store)
+ * -------------------------------------------------------------------------- */
+function testHistory(App) {
+  section('Histórico de sorteios');
+  if (!App.History) { ok('App.History existe', false); return; }
+  const S = App.State; App.History.clear();
+  // simula um sorteio concluído
+  S.participantes = ['Ana', 'Bruno', 'Carla']; S.mode = 'single'; S.lastSeed = 12345; S.prize = 'Café'; S.teamOf = {};
+  S.cavalos = [{ nome: 'Ana' }, { nome: 'Bruno' }, { nome: 'Carla' }]; S.sim = { order: [1, 0, 2] }; // vencedor = cavalos[1] = Bruno
+  App.History.record();
+  const h = App.History.list();
+  ok('registra a entrada', h.length === 1);
+  ok('vencedor + semente + modo + nomes corretos', h[0].winner === 'Bruno' && h[0].seed === 12345 && h[0].mode === 'single' && h[0].names.length === 3);
+  App.History.record(); // reprise da mesma semente
+  ok('reprise (mesma semente) não duplica', App.History.list().length === 1);
+  S.lastSeed = 999; S.sim = { order: [2, 1, 0] }; App.History.record(); // novo sorteio
+  ok('novo sorteio entra no topo', App.History.list().length === 2 && App.History.list()[0].seed === 999);
+  // reabrir restaura o estado (entrada 1 = semente 12345)
+  S.participantes = []; S.mode = 'teams'; S.lastSeed = 0;
+  App.History.reopen(1);
+  ok('reopen restaura participantes + modo', S.participantes.length === 3 && S.mode === 'single');
+  App.History.clear();
+  ok('limpar zera o histórico', App.History.list().length === 0);
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
@@ -304,5 +330,6 @@ testPrefs(App);
 testA11yQr(App);
 testPalette(App);
 testJockeyTone(App);
+testHistory(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);

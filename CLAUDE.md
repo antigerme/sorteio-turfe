@@ -42,7 +42,8 @@ Há três modos:
 | `App.Dom` (`D`) | Atalhos de DOM: `id`, `qsa`, `on`, `setText`, `setHTML` |
 | `App.RNG` | `mulberry32` + `shuffle` (base do sorteio justo) |
 | `App.State` (`S`) | Estado central mutável (lido/escrito pelos demais) |
-| `App.Store` | Persistência local (localStorage): **cadastro** (auto) + **preferências** de UI via `pref()` (tema, mudo/voz, volume) |
+| `App.Store` | Persistência local (localStorage): **cadastro** (auto), **preferências** de UI via `pref()` (tema, mudo/voz, volume) e **histórico** via `histLoad/histSave` |
+| `App.History` | Histórico de sorteios: registra cada resultado (vencedor + semente + cadastro) e permite **reabrir** (reproduz exatamente) |
 | `App.View` | Chrome visual + a11y: **tema** claro/escuro (persistido), **tela cheia**, `reducedMotion()` (respeita `prefers-reduced-motion`) e `announce()` (região `aria-live`) |
 | `App.Timing` | `seq`/`clearSeq` (timers agendados com try/catch) |
 | `App.Bus` | Event bus mínimo (`on`/`emit`) — desacopla reações |

@@ -56,6 +56,10 @@
   .tools { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
   .panel { display:none; margin-bottom:14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
   .panel.open { display:block; }
+  .histrow { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 2px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .histrow:last-of-type { border-bottom:none; }
+  .histinfo { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .histacts { display:flex; gap:6px; flex-shrink:0; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; }
   .chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:14px; }
   .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -213,8 +217,10 @@
     </div>
     <div class="tools">
       <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
+      <button class="btn btn-sm" id="histBtn" data-action="toggleHist">📜 Histórico</button>
       <button class="btn btn-sm" data-action="limparTudo">🗑️ Limpar tudo</button>
     </div>
+    <div class="panel" id="histBox"></div>
     <div class="hint" id="persistHint">💾 Seu cadastro fica salvo <b>neste navegador</b> — recarregar não perde. Use 🗑️ Limpar tudo para apagar.</div>
 
     <div class="panel" id="teamsBox">
@@ -361,6 +367,7 @@ App.Config = {
   APPNAME: 'Sorteio (Turfe)',
   MAX: 100,                 // limite de participantes
   MAXHEAT: 6,               // máx. de participantes por bateria (torneio)
+  histMax: 30,              // máx. de sorteios guardados no histórico (localStorage)
   HORSES: ['🐎','🦄','🐴','🦓','🏇','🎠','🫏'], // "cavalos" ciclados por índice (cavalo/unicórnio/égua/zebra/jóquei/carrossel/burro); 🫏 é Unicode 15 (pode virar tofu em aparelho antigo)
   PAL: ['#0072B2','#D55E00','#785EF0','#009E73','#CC79A7','#3A3A3A','#56B4E9','#9B1D5E','#E69F00','#117733'], // paleta segura p/ daltonismo (Okabe-Ito + extras); ordem intercala frio/quente p/ baias vizinhas distintas
   TEAMPAL: ['#0072B2','#D55E00','#117733','#AA3377','#785EF0','#3A3A3A','#009E73','#8A5A00'], // equipes: tons escuros (texto branco) e distinguíveis em daltonismo
@@ -565,7 +572,63 @@ App.Store = (function(){
     try { const p = prefs(); p[key] = value; store.setItem(PKEY, JSON.stringify(p)); } catch (e) { Log.warn('Store','falha ao salvar pref', e); }
     return value;
   }
-  return { save, restore, clear, arm, snapshot, prefs, pref };
+  // --- Histórico de sorteios (chave própria) ---
+  const HKEY = 'sorteio-turfe:hist:v1';
+  function histLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(HKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function histSave(arr){ const store = ls(); if (!store) return; try { store.setItem(HKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar histórico', e); } }
+  return { save, restore, clear, arm, snapshot, prefs, pref, histLoad, histSave };
+})();
+
+/* ===================== History — histórico de sorteios ===================== */
+/* Cada sorteio concluído (revelação) vira uma entrada salva no localStorage (via App.Store),
+   com vencedor + semente + cadastro — para reabrir e reproduzir exatamente. */
+App.History = (function(){
+  const MICON = { single:'🏇', tournament:'🏆', teams:'👥' };
+  function list(){ return App.Store.histLoad(); }
+  function fmtDate(ts){ try { const d = new Date(ts); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); } catch (e) { return ''; } }
+  // Registra o sorteio recém-revelado. Evita duplicar reprises (mesma semente/modo/n no topo).
+  function record(){
+    try {
+      if (!S.sim || !S.cavalos.length) return;
+      const v = S.cavalos[S.sim.order[0]];
+      const entry = { ts: Date.now(), mode: S.mode, winner: v.nome, seed: (S.lastSeed >>> 0),
+                      prize: S.prize || '', names: S.participantes.slice(),
+                      teamOf: (S.mode === 'teams') ? Object.assign({}, S.teamOf) : null, n: S.participantes.length };
+      let arr = list();
+      if (arr[0] && arr[0].seed === entry.seed && arr[0].mode === entry.mode && arr[0].n === entry.n) { render(); return; }
+      arr.unshift(entry); arr = arr.slice(0, CFG.histMax); App.Store.histSave(arr);
+      Log.info('History','sorteio registrado', { vencedor:v.nome, seed:entry.seed, total:arr.length });
+      render();
+    } catch (e) { Log.warn('History','falha ao registrar', e); }
+  }
+  function clear(){ App.Store.histSave([]); render(); App.Roster.msg('Histórico limpo.', true); }
+  function remove(i){ const a = list(); if (i < 0 || i >= a.length) return; a.splice(i, 1); App.Store.histSave(a); render(); }
+  // Reabre um sorteio no cadastro (clicar Iniciar reproduz exatamente — mesma semente).
+  function reopen(i){
+    const e = list()[i]; if (!e) return;
+    S.participantes = (e.names || []).slice();
+    S.teamOf = (e.teamOf && typeof e.teamOf === 'object') ? Object.assign({}, e.teamOf) : {};
+    S.teams = [...new Set(Object.values(S.teamOf))]; S.teamColors = {};
+    S.mode = (e.mode === 'tournament' || e.mode === 'teams') ? e.mode : 'single';
+    try {
+      App.Modes.set(S.mode); S.teams.forEach(t => App.Teams.color(t));
+      const pi = D.id('prizeInp'); if (pi) pi.value = e.prize || '';
+      const si = D.id('seedInp'); if (si && e.seed != null) { si.value = String(e.seed >>> 0); const a = D.id('advOpts'); if (a) a.open = true; }
+      App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
+      App.Screens.show('screen-cadastro');
+      App.Roster.msg('↩️ Sorteio reaberto — confira e clique em Iniciar ✓', true);
+    } catch (err) { Log.warn('History','UI da reabertura parcial', err); }
+    Log.info('History','sorteio reaberto', { vencedor:e.winner, seed:e.seed });
+  }
+  function render(){
+    const box = D.id('histBox'); const btn = D.id('histBtn'); const a = list();
+    if (btn) btn.textContent = '📜 Histórico' + (a.length ? ` (${a.length})` : '');
+    if (!box) return;
+    if (!a.length) { box.innerHTML = '<div class="empty">Nenhum sorteio ainda. Os resultados aparecem aqui para reabrir.</div>'; return; }
+    box.innerHTML = a.map((e, i) => `<div class="histrow"><div class="histinfo"><b>${MICON[e.mode] || '🏇'} ${U.esc(e.winner)}</b><span class="hint">${e.n} part. · semente ${e.seed} · ${fmtDate(e.ts)}</span></div><div class="histacts"><button class="btn btn-sm" data-action="reabrirHist" data-idx="${i}">↩️ Reabrir</button><button class="btn btn-sm" data-action="removerHist" data-idx="${i}" aria-label="Remover do histórico">🗑️</button></div></div>`).join('')
+      + '<div style="text-align:right;margin-top:10px"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button></div>';
+  }
+  return { record, list, clear, remove, reopen, render };
 })();
 
 /* ===================== View — tema (claro/escuro) + tela cheia ===================== */
@@ -1423,6 +1486,7 @@ App.Result = (function(){
     App.Screens.show('res'); build();
     const v = S.cavalos[S.sim.order[0]];
     App.View.announce((S.mode === 'tournament' ? 'Campeão do torneio' : 'Vencedor') + ': ' + v.nome + '.');
+    App.History.record(); // guarda este sorteio no histórico
     if (App.View.reducedMotion()) { // sem suspense/confete: mostra o resultado direto
       D.id('reveal').style.display = 'none'; D.id('resContent').style.display = 'block';
       App.Audio.winnerFanfare(); App.Audio.applause(2);
@@ -1603,6 +1667,10 @@ App.UI = (function(){
     addBulk:    () => App.Roster.addBulk(),
     limparTudo: () => App.Roster.clear(),
     togglePanel:(el) => togglePanel(el.dataset.arg),
+    toggleHist: () => { togglePanel('histBox'); App.History.render(); },
+    reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
+    removerHist:(el) => App.History.remove(+el.dataset.idx),
+    limparHist: () => App.History.clear(),
     removerP:   (el) => App.Roster.remove(+el.dataset.idx),
     criarEquipe:() => App.Teams.create(),
     removerEquipe:(el) => App.Teams.remove(+el.dataset.idx),
@@ -1701,7 +1769,7 @@ App.UI = (function(){
     // Vozes da narração (carregamento assíncrono em alguns navegadores)
     if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
     // Render inicial
-    App.Roster.render(); App.Teams.renderChips();
+    App.Roster.render(); App.Teams.renderChips(); App.History.render();
     // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável; assíncrono p/ descomprimir)
     applyUrlParams().catch(e => Log.warn('UI','applyUrlParams falhou', e));
     Log.info('UI','interface pronta');
