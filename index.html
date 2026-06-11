@@ -119,6 +119,12 @@
   /* ===== MODAL DO QR CODE ===== */
   #qrModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
   #qrModal.open { display:flex; }
+  #histModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  #histModal.open { display:flex; }
+  .hist-card { background:var(--bg); color:var(--tp); border:1px solid var(--border); border-radius:14px; padding:16px 18px; box-shadow:0 18px 60px rgba(0,0,0,.4); max-width:min(520px,94vw); width:100%; max-height:80vh; display:flex; flex-direction:column; animation:pop .3s ease; }
+  .hist-head { font-size:16px; font-weight:700; margin-bottom:6px; }
+  .hist-card #histBox { overflow-y:auto; }
+  .hist-foot { display:flex; justify-content:space-between; gap:8px; margin-top:12px; flex-shrink:0; }
   .qr-card { background:#fff; border-radius:14px; padding:18px 20px 16px; box-shadow:0 18px 60px rgba(0,0,0,.5); text-align:center; max-width:min(420px,94vw); animation:pop .35s ease; }
   .qr-card .qr-cap { font-size:15px; font-weight:600; color:var(--tp); margin-bottom:12px; }
   .qr-card canvas { display:block; margin:0 auto; image-rendering:pixelated; border-radius:6px; max-width:100%; height:auto; }
@@ -184,6 +190,7 @@
 <body>
 <!-- Menu de som (fixo, canto superior direito) -->
 <div id="topControls" style="position:fixed;top:12px;right:12px;z-index:60;display:flex;gap:8px;align-items:flex-start">
+  <button id="histBtn" class="btn btn-sm" style="background:var(--bg);display:none" data-action="abrirHist" title="Histórico de sorteios" aria-label="Histórico de sorteios">📜</button>
   <button id="themeBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleTheme" title="Tema escuro" aria-label="Alternar tema">🌙</button>
   <button id="fsBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleFullscreen" title="Tela cheia (apresentação)" aria-label="Tela cheia">⛶</button>
   <div id="soundWrap" style="position:relative">
@@ -217,11 +224,9 @@
     </div>
     <div class="tools">
       <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
-      <button class="btn btn-sm" id="histBtn" data-action="toggleHist">📜 Histórico</button>
       <button class="btn btn-sm" data-action="limparTudo">🗑️ Limpar tudo</button>
     </div>
-    <div class="panel" id="histBox"></div>
-    <div class="hint" id="persistHint">💾 Seu cadastro fica salvo <b>neste navegador</b> — recarregar não perde. Use 🗑️ Limpar tudo para apagar.</div>
+    <div class="hint" id="persistHint" title="Recarregar não perde; 🗑️ Limpar tudo apaga.">💾 Cadastro salvo neste navegador</div>
 
     <div class="panel" id="teamsBox">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -317,6 +322,7 @@
 <div id="cd"><div id="cd-num"></div></div>
 <div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
 <div id="qrModal" role="dialog" aria-modal="true" aria-label="QR Code do sorteio"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas" role="img" aria-label="QR Code do link do sorteio"></canvas><div class="qr-sub" id="qrSub"></div><div class="qr-actions"><button class="btn btn-sm" data-action="baixarQrPng">⬇️ PNG</button><button class="btn btn-sm" data-action="baixarQrSvg">⬇️ SVG</button><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div></div>
+<div id="histModal" role="dialog" aria-modal="true" aria-label="Histórico de sorteios"><div class="hist-card"><div class="hist-head">📜 Histórico de sorteios</div><div id="histBox"></div><div class="hist-foot"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button><button class="btn btn-sm" data-action="fecharHist">Fechar</button></div></div></div>
 <canvas id="confetti" aria-hidden="true" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -601,11 +607,20 @@ App.History = (function(){
       render();
     } catch (e) { Log.warn('History','falha ao registrar', e); }
   }
-  function clear(){ App.Store.histSave([]); render(); App.Roster.msg('Histórico limpo.', true); }
-  function remove(i){ const a = list(); if (i < 0 || i >= a.length) return; a.splice(i, 1); App.Store.histSave(a); render(); }
+  let lastFocus = null;
+  // Modal do histórico (no canto): abre/fecha com foco gerenciado (teclado).
+  function open(){
+    render(); lastFocus = document.activeElement;
+    const m = D.id('histModal'); if (!m) return; m.classList.add('open');
+    const fb = m.querySelector('[data-action="reabrirHist"], [data-action="fecharHist"]'); if (fb) fb.focus();
+  }
+  function close(){ const m = D.id('histModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
+  function clear(){ App.Store.histSave([]); render(); close(); App.Roster.msg('Histórico limpo.', true); }
+  function remove(i){ const a = list(); if (i < 0 || i >= a.length) return; a.splice(i, 1); App.Store.histSave(a); render(); if (!a.length) close(); }
   // Reabre um sorteio no cadastro (clicar Iniciar reproduz exatamente — mesma semente).
   function reopen(i){
     const e = list()[i]; if (!e) return;
+    close();
     S.participantes = (e.names || []).slice();
     S.teamOf = (e.teamOf && typeof e.teamOf === 'object') ? Object.assign({}, e.teamOf) : {};
     S.teams = [...new Set(Object.values(S.teamOf))]; S.teamColors = {};
@@ -621,14 +636,13 @@ App.History = (function(){
     Log.info('History','sorteio reaberto', { vencedor:e.winner, seed:e.seed });
   }
   function render(){
-    const box = D.id('histBox'); const btn = D.id('histBtn'); const a = list();
-    if (btn) btn.textContent = '📜 Histórico' + (a.length ? ` (${a.length})` : '');
-    if (!box) return;
-    if (!a.length) { box.innerHTML = '<div class="empty">Nenhum sorteio ainda. Os resultados aparecem aqui para reabrir.</div>'; return; }
-    box.innerHTML = a.map((e, i) => `<div class="histrow"><div class="histinfo"><b>${MICON[e.mode] || '🏇'} ${U.esc(e.winner)}</b><span class="hint">${e.n} part. · semente ${e.seed} · ${fmtDate(e.ts)}</span></div><div class="histacts"><button class="btn btn-sm" data-action="reabrirHist" data-idx="${i}">↩️ Reabrir</button><button class="btn btn-sm" data-action="removerHist" data-idx="${i}" aria-label="Remover do histórico">🗑️</button></div></div>`).join('')
-      + '<div style="text-align:right;margin-top:10px"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button></div>';
+    const a = list();
+    const btn = D.id('histBtn'); if (btn) { btn.style.display = a.length ? '' : 'none'; btn.title = 'Histórico de sorteios (' + a.length + ')'; } // só aparece com histórico
+    const box = D.id('histBox'); if (!box) return;
+    if (!a.length) { box.innerHTML = '<div class="empty">Nenhum sorteio ainda.</div>'; return; }
+    box.innerHTML = a.map((e, i) => `<div class="histrow"><div class="histinfo"><b>${MICON[e.mode] || '🏇'} ${U.esc(e.winner)}</b><span class="hint">${e.n} part. · semente ${e.seed} · ${fmtDate(e.ts)}</span></div><div class="histacts"><button class="btn btn-sm" data-action="reabrirHist" data-idx="${i}">↩️ Reabrir</button><button class="btn btn-sm" data-action="removerHist" data-idx="${i}" aria-label="Remover do histórico">🗑️</button></div></div>`).join('');
   }
-  return { record, list, clear, remove, reopen, render };
+  return { record, list, clear, remove, reopen, open, close, render };
 })();
 
 /* ===================== View — tema (claro/escuro) + tela cheia ===================== */
@@ -1667,7 +1681,8 @@ App.UI = (function(){
     addBulk:    () => App.Roster.addBulk(),
     limparTudo: () => App.Roster.clear(),
     togglePanel:(el) => togglePanel(el.dataset.arg),
-    toggleHist: () => { togglePanel('histBox'); App.History.render(); },
+    abrirHist:  () => App.History.open(),
+    fecharHist: () => App.History.close(),
     reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
     removerHist:(el) => App.History.remove(+el.dataset.idx),
     limparHist: () => App.History.clear(),
@@ -1701,6 +1716,7 @@ App.UI = (function(){
     if (!e.target.closest('#saveWrap')) App.Result.closeSave();
     if (!e.target.closest('#soundWrap')) App.Audio.closeMenu();
     if (e.target.id === 'qrModal') App.Result.closeQR();
+    if (e.target.id === 'histModal') App.History.close();
     const el = e.target.closest('[data-action]'); if (!el) return;
     const name = el.dataset.action, fn = ACTIONS[name];
     if (!fn) { Log.warn('UI','ação sem handler', { action:name }); return; }
@@ -1761,7 +1777,7 @@ App.UI = (function(){
     // Delegação global de cliques
     D.on(document, 'click', onClick);
     // Teclado global: Esc fecha o modal do QR e os menus abertos
-    D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.Result.closeSave(); App.Audio.closeMenu(); } });
+    D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
     App.View.init();
     D.on(D.id('volSlider'), 'input', e => App.Audio.setVolume(e.target.value / 100));
