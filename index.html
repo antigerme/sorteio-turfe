@@ -897,7 +897,7 @@ App.Roster = (function(){
     if (!S.participantes.length) { el.innerHTML = '<div class="empty">Nenhum participante ainda. Adicione pelo menos 2 para começar.</div>'; return; }
     el.innerHTML = S.participantes.map((n,i) => {
       const tg = (S.mode === 'teams' && S.teamOf[n]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[n])}">${U.esc(S.teamOf[n])}</span>` : '';
-      return `<div class="chip"><span class="e">${U.horseEmoji(i)}</span><span class="n">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      return `<div class="chip"><span class="e">🙂</span><span class="n">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
     }).join('');
   }
   return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render };
@@ -1133,7 +1133,10 @@ App.Race = (function(){
   function run(names, seed, label){
     App.Audio.ensure(); clearAll();
     S.prize = D.id('prizeInp').value.trim();
-    S.cavalos = names.map((nome,i) => ({ nome, team:(S.teamOf[nome]||null), emoji:U.horseEmoji(i), cor:U.corOf(i), idx:i }));
+    // Sprite NÃO depende da ordem do cadastro: é sorteado pela semente (reproduzível pelo link;
+    // RNG separado da simulação) e só aparece na largada — ninguém "escolhe" quem pega o quê.
+    const sprites = App.RNG.shuffle(names.map((_, i) => U.horseEmoji(i)), App.RNG.mulberry32(seed >>> 0));
+    S.cavalos = names.map((nome,i) => ({ nome, team:(S.teamOf[nome]||null), emoji:sprites[i], cor:U.corOf(i), idx:i }));
     S.sim = App.Sim.simulate(seed, S.cavalos.length);
     Log.info('Race','corrida iniciada', { n:S.cavalos.length, seed, mode:S.mode, label, close:S.sim.close });
     App.Render.pista();
