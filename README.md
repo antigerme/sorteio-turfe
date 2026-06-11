@@ -85,6 +85,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - 🔊 **Volume e mudo persistentes** — ajuste o som (ou silencie) no menu **🔊 Som**; a preferência fica salva.
 - 🔗 **Preview do link** — ao copiar o link compartilhável, ele aparece num campo pra você **conferir e recopiar**.
 - 🎭 **Bicho surpresa** — cada participante vira um cavalo, unicórnio, zebra, burro, jóquei... mas o sprite é **sorteado pela semente e revelado só na largada** (no cadastro todo mundo é um 🙂). Ninguém escolhe quem pega o quê — e a zoeira de "quem pegou o burro" vira momento ao vivo. 😄
+- 📜 **Histórico de sorteios** — cada corrida fica salva (vencedor + semente + data); reabra qualquer uma com **um clique** para rodar de novo (mesma semente reproduz tudo).
 - 🏆 **Pódio, estatísticas e classificação completa** (viradas de liderança, ultrapassagens, arrancadas).
 - 💾 **Exportar** o resultado em **PDF**, **certificado de vitória (PDF)** ou **imagem (PNG)**.
 - 👥 **Até 100 participantes**, com **colar lista** (um nome por linha; "Nome, Equipe" no modo equipes).
