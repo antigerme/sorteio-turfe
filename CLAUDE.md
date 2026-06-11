@@ -51,7 +51,7 @@ Há três modos:
 | `App.Sim` | **Simulação determinística** (`simulate(seed, n)`) |
 | `App.Screens` | Troca de tela (`show(id)`) |
 | `App.Teams` | Equipes (criar/remover/cores/placar) |
-| `App.Roster` | Participantes (adicionar/colar/remover/validar) |
+| `App.Roster` | Participantes (adicionar/colar/remover/validar/**editar inline**/**reordenar** por arrastar) |
 | `App.Modes` | Alterna o modo (single/tournament/teams) |
 | `App.Render` | Desenho da pista/cavalos/badges/ranks |
 | `App.Narration` | Falas + reação aos eventos da corrida (assina o `Bus`) |
@@ -129,7 +129,12 @@ por causa das políticas de autoplay dos navegadores. Não há lint/build; os te
   `CompressionStream`; helpers em `App.Util`) — encurta muito p/ listas grandes (ex.: 100 nomes
   ~3 KB → centenas de bytes). No boot, `App.UI.applyUrlParams` (async) descomprime e
   **pré-preenche** o cadastro (sem auto-iniciar), com fallback p/ fragmento cru `#…` e p/
-  `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `p` (prêmio), `seed`).
+  `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `getAll('p')` (prêmios 1º/2º/3º), `seed`).
+- **Prêmios / sequencial / editar**: o prêmio aceita **1º/2º/3º** (`S.prizes`; o resultado mostra cada
+  posição do pódio). O **sorteio sequencial** (`App.Race.proximo`) tira o vencedor da lista e re-sorteia
+  os restantes (novo sorteio aleatório; `S.drawn` lista quem já saiu). No cadastro dá pra **editar o nome
+  inline** (clique no nome) e **reordenar arrastando** o chip — nada disso afeta o "sorteio justo", que é
+  decidido pela semente.
 - **Acessibilidade**: foco visível (`:focus-visible`), `aria-label` nos campos, modal do QR como
   `role="dialog"` (foco entra ao abrir, `Esc` fecha e devolve o foco) e anúncios de resultado por
   `App.View.announce()` (região `#srLive` `aria-live`). Com **`prefers-reduced-motion`**,

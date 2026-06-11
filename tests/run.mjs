@@ -319,6 +319,24 @@ function testHistory(App) {
   ok('limpar zera o histórico', App.History.list().length === 0);
 }
 
+/* ----------------------------------------------------------------------------
+ * 9) Reordenar / editar / sorteio sequencial
+ * -------------------------------------------------------------------------- */
+function testExtras(App) {
+  section('Reordenar / editar / sequencial');
+  const S = App.State;
+  S.participantes = ['A', 'B', 'C', 'D']; S.teamOf = {}; S.editing = null; S.mode = 'single';
+  App.Roster.reorder(0, 2);
+  ok('reorder move o participante', JSON.stringify(S.participantes) === JSON.stringify(['B', 'C', 'A', 'D']));
+  App.Roster.reorder(3, 0);
+  ok('reorder para o início', JSON.stringify(S.participantes) === JSON.stringify(['D', 'B', 'C', 'A']));
+  App.Roster.startEdit(1); ok('startEdit marca o índice em edição', S.editing === 1); S.editing = null;
+  // sequencial: tira o vencedor (caminho terminal com 2 participantes)
+  S.participantes = ['Ana', 'Bruno']; S.cavalos = [{ nome: 'Ana' }, { nome: 'Bruno' }]; S.sim = { order: [0, 1] }; S.drawn = []; S.mode = 'single';
+  App.Race.proximo();
+  ok('proximo retira o vencedor e registra em drawn', S.drawn[0] === 'Ana' && S.participantes.length === 1 && S.participantes[0] === 'Bruno');
+}
+
 /* -------------------------------------------------------------------------- */
 console.log('🏇 Sorteio (Turfe) — testes' + (UPDATE ? ' [--update]' : ''));
 testSyntax();
@@ -331,5 +349,6 @@ testA11yQr(App);
 testPalette(App);
 testJockeyTone(App);
 testHistory(App);
+testExtras(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);
