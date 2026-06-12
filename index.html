@@ -938,7 +938,7 @@ App.Sim = (function(){
 
 /* ===================== Screens — troca de tela ===================== */
 App.Screens = (function(){
-  function show(id){ D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); Log.debug('Screens','tela ativa', { id }); }
+  function show(id){ if (App.FX) App.FX.stop(); D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); Log.debug('Screens','tela ativa', { id }); }
   return { show };
 })();
 
@@ -1296,7 +1296,18 @@ App.PhotoFinish = (function(){
 
 /* ===================== FX — confete/fogos da comemoração ===================== */
 App.FX = (function(){
+  let gen = 0;
+  // Encerra a comemoração: invalida loops em andamento, cancela o RAF e LIMPA/esconde
+  // o canvas — senão o último frame de confete fica "preso" sobre a próxima tela
+  // quando se troca de tela rápido (nova corrida, próximo, reprisar, editar...).
+  function stop(){
+    gen++;
+    if (S.celebRaf) { cancelAnimationFrame(S.celebRaf); S.celebRaf = null; }
+    const cv = D.id('confetti'); if (cv) { const ctx = cv.getContext('2d'); if (ctx) ctx.clearRect(0,0,cv.width,cv.height); cv.style.display = 'none'; }
+  }
   function celebration(){
+    stop();                       // nunca empilha duas comemorações
+    const myGen = gen;
     const cv = D.id('confetti'), ctx = cv.getContext('2d');
     cv.style.display = 'block'; cv.width = window.innerWidth; cv.height = window.innerHeight;
     const cols = ['#534AB7','#D85A30','#1D9E75','#D4537E','#BA7517','#185FA5','#E24B4A','#FAC775'];
@@ -1305,17 +1316,18 @@ App.FX = (function(){
     function firework(x,y){ const c = cols[(Math.random()*cols.length)|0]; for (let i=0;i<36;i++){ const a=i/36*6.28, sp=2+Math.random()*3; parts.push({ fw:1, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, c }); } App.Audio.pop(); }
     const t0 = performance.now(); let lastFw = 0;
     const draw = now => {
+      if (myGen !== gen) return;  // cancelada por nova comemoração ou troca de tela
       const t = now - t0; ctx.clearRect(0,0,cv.width,cv.height);
       if (t-lastFw > 650 && t < 3200){ lastFw = t; firework(Math.random()*cv.width, cv.height*.2 + Math.random()*cv.height*.3); }
       for (let k=parts.length-1;k>=0;k--){ const p = parts[k];
         if (p.fw){ p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=.012; if (p.life<=0){ parts.splice(k,1); continue; } ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,6.28); ctx.fill(); }
         else { p.x+=p.vx; p.y+=p.vy; p.vy+=.04; p.rot+=p.vr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=Math.max(0,1-t/4500); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore(); }
       }
-      if (t < 4600) S.celebRaf = requestAnimationFrame(draw); else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display='none'; }
+      if (t < 4600) S.celebRaf = requestAnimationFrame(draw); else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display='none'; S.celebRaf = null; }
     };
     S.celebRaf = requestAnimationFrame(draw);
   }
-  return { celebration };
+  return { celebration, stop };
 })();
 
 /* ===================== Race — orquestra UMA corrida ===================== */
@@ -1336,7 +1348,7 @@ App.Race = (function(){
   function clearAll(){
     S.gen++;
     if (S.raf) cancelAnimationFrame(S.raf);
-    if (S.celebRaf) cancelAnimationFrame(S.celebRaf);
+    if (App.FX) App.FX.stop(); // encerra e LIMPA o confete (não deixa frame preso na tela)
     clearTimeout(S.narrTimer); App.Timing.clearSeq();
     App.Audio.stopHeart(); App.Audio.crowdStop();
     hideCD(); const fl = D.id('flash'); if (fl) fl.style.display = 'none';
