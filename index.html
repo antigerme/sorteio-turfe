@@ -248,13 +248,14 @@
       <button class="btn btn-sm btn-go" data-action="addBulk">Adicionar lista</button>
     </div>
 
-    <label class="fld">🏆 Prêmio em disputa (opcional)</label>
-    <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio do 1º lugar">
+    <label class="fld">🏆 Prêmio(s) — opcional (sorteados em ordem)</label>
+    <input type="text" id="prizeInp" placeholder="1º prêmio (ex.: um fone de ouvido)" maxlength="60" style="width:100%" aria-label="1º prêmio">
     <div id="prizesExtra" style="display:none;margin-top:8px">
-      <input type="text" id="prizeInp2" placeholder="Prêmio do 2º lugar (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="Prêmio do 2º lugar">
-      <input type="text" id="prizeInp3" placeholder="Prêmio do 3º lugar (opcional)" maxlength="60" style="width:100%" aria-label="Prêmio do 3º lugar">
+      <input type="text" id="prizeInp2" placeholder="2º prêmio (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="2º prêmio">
+      <input type="text" id="prizeInp3" placeholder="3º prêmio (opcional)" maxlength="60" style="width:100%" aria-label="3º prêmio">
     </div>
-    <button class="btn btn-sm" id="prizesToggle" data-action="togglePrizes" style="margin-top:6px">➕ Prêmios para 2º e 3º lugar</button>
+    <button class="btn btn-sm" id="prizesToggle" data-action="togglePrizes" style="margin-top:6px">➕ Mais prêmios (2º, 3º...)</button>
+    <div class="hint" style="margin-top:6px">Cada prêmio sai num sorteio: o 1º vencedor leva o 1º prêmio; use <b>"Tirar vencedor e sortear de novo"</b> no resultado para os próximos.</div>
 
     <details id="advOpts">
       <summary>Opções avançadas — sorteio justo</summary>
@@ -1257,8 +1258,8 @@ App.Race = (function(){
     D.setText('racelabel', label || '');
     setHeader('Preparando...', false);
     const showPrize = (S.mode !== 'tournament') || (S.tour && S.tour.isFinal);
-    const emDisputa = (S.prizes || []).filter(Boolean).join(' · ');
-    D.setText('raceprize', (emDisputa && showPrize) ? ('🏆 Em disputa: ' + emDisputa) : '');
+    const filaR = (S.prizes || []).filter(Boolean), curPrize = filaR[S.drawn.length];
+    D.setText('raceprize', (curPrize && showPrize) ? ('🏆 Em disputa: ' + curPrize + (filaR.length > 1 ? ` (prêmio ${S.drawn.length + 1} de ${filaR.length})` : '')) : '');
     const nv = D.id('narr'); nv.classList.remove('fire'); nv.textContent = 'Cavalos a postos na linha de largada...';
     D.id('pista').classList.remove('reta');
     if (App.View.reducedMotion()) return runFast(); // respeita prefers-reduced-motion
@@ -1570,10 +1571,14 @@ App.Result = (function(){
     D.setText('resTitle', isTour ? '🏆 Campeão do torneio' : '🏆 Resultado do sorteio');
     D.setText('resSub', isTour ? 'Grande final do torneio' : `Corrida com ${S.cavalos.length} participantes`);
     const medals = ['🥇','🥈','🥉'];
-    const plines = (S.prizes || []).map((pr, i) => { if (!pr) return ''; const c = S.cavalos[S.sim.order[i]]; return c ? `${medals[i]} ${U.esc(c.nome)} leva: <b>${U.esc(pr)}</b>` : ''; }).filter(Boolean);
-    D.setHTML('prizeline', plines.join('<br>'));
-    D.setText('drawnLine', S.drawn.length ? ('🏅 Já sorteados nesta rodada: ' + S.drawn.join(', ')) : '');
-    const bp = D.id('btnProximo'); if (bp) bp.style.display = (!isTour && S.participantes.length >= 3) ? '' : 'none';
+    // Prêmios SEQUENCIAIS: o vencedor deste sorteio leva o prêmio nº (S.drawn.length+1).
+    const fila = (S.prizes || []).filter(Boolean), di = S.drawn.length;
+    if (fila[di]) D.setHTML('prizeline', `🏆 ${U.esc(v.nome)} leva: <b>${U.esc(fila[di])}</b>` + (fila.length > 1 ? ` <span class="hint">(prêmio ${di + 1} de ${fila.length})</span>` : ''));
+    else if (fila.length && di >= fila.length) D.setHTML('prizeline', `🎉 Todos os ${fila.length} prêmios já foram sorteados!`);
+    else D.setHTML('prizeline', '');
+    D.setHTML('drawnLine', S.drawn.length ? ('🏅 Já sorteados: ' + S.drawn.map((w, i) => `${medals[i] || (i+1)+'º'} ${U.esc(w)}${fila[i] ? ' — <b>' + U.esc(fila[i]) + '</b>' : ''}`).join(' &nbsp;·&nbsp; ')) : '');
+    const bp = D.id('btnProximo');
+    if (bp) { const show = !isTour && S.participantes.length >= 3; bp.style.display = show ? '' : 'none'; if (show) { const next = fila[di + 1]; bp.textContent = next ? ('🏅 Sortear o próximo prêmio: ' + next) : '🏅 Tirar vencedor e sortear de novo'; } }
     D.setHTML('podio', `<div class="vcard"><div class="ve">${v.emoji}</div><div class="vn">${U.esc(v.nome)}</div><div class="vl">${isTour?'Campeão':'Vencedor'}</div></div><div class="outros">${S.sim.order.slice(1,3).map((idx,i) => { const c = S.cavalos[idx]; return `<div class="mini">${['🥈','🥉'][i]} <span>${c.emoji}</span> ${U.esc(c.nome)}</div>`; }).join('')}</div>`);
     D.setHTML('teamStandings', (S.mode === 'teams') ? App.Teams.standingsHtml() : '');
     D.setHTML('bracketBox', isTour ? ('<div class="bk-round" style="max-width:560px;margin:0 auto"><div class="rh" style="text-align:center">Caminho até o título</div></div>' + App.Tournament.bracketHtml()) : '');
@@ -1732,7 +1737,7 @@ App.UI = (function(){
     addBulk:    () => App.Roster.addBulk(),
     limparTudo: () => App.Roster.clear(),
     togglePanel:(el) => togglePanel(el.dataset.arg),
-    togglePrizes: () => { const e = D.id('prizesExtra'); if (!e) return; const open = e.style.display !== 'none'; e.style.display = open ? 'none' : 'block'; const b = D.id('prizesToggle'); if (b) b.textContent = open ? '➕ Prêmios para 2º e 3º lugar' : '➖ Esconder 2º e 3º lugar'; },
+    togglePrizes: () => { const e = D.id('prizesExtra'); if (!e) return; const open = e.style.display !== 'none'; e.style.display = open ? 'none' : 'block'; const b = D.id('prizesToggle'); if (b) b.textContent = open ? '➕ Mais prêmios (2º, 3º...)' : '➖ Esconder 2º e 3º prêmio'; },
     abrirHist:  () => App.History.open(),
     fecharHist: () => App.History.close(),
     reabrirHist:(el) => App.History.reopen(+el.dataset.idx),

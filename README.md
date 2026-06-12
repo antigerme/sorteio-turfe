@@ -89,8 +89,7 @@ Todo o resto aqui é **acessório** (documentação e apresentação) e pode ser
 - 🏆 **Pódio, estatísticas e classificação completa** (viradas de liderança, ultrapassagens, arrancadas).
 - 💾 **Exportar** o resultado em **PDF**, **certificado de vitória (PDF)** ou **imagem (PNG)**.
 - 👥 **Até 100 participantes**, com **colar lista** (um nome por linha; "Nome, Equipe" no modo equipes), **editar nome inline** (clique) e **reordenar arrastando**.
-- 🥇 **Prêmios para 1º, 2º e 3º** — defina um prêmio por posição do pódio; o resultado mostra quem leva o quê.
-- 🏅 **Sorteio sequencial** — no resultado, **"Tirar vencedor e sortear de novo"** sorteia o próximo sem repetir (ótimo para vários ganhadores).
+- 🥇 **Vários prêmios + sorteio sequencial** — defina uma **fila de prêmios** (1º, 2º, 3º...) e sorteie **um por vez**: o 1º vencedor leva o 1º prêmio, depois **"Tirar vencedor e sortear de novo"** dá o próximo prêmio ao próximo sorteado, sem repetir nomes. Ideal para rifas com vários prêmios.
 - 🎉 Confete, fogos e aquela comemoração no final.
 
 ---

@@ -130,11 +130,12 @@ por causa das políticas de autoplay dos navegadores. Não há lint/build; os te
   ~3 KB → centenas de bytes). No boot, `App.UI.applyUrlParams` (async) descomprime e
   **pré-preenche** o cadastro (sem auto-iniciar), com fallback p/ fragmento cru `#…` e p/
   `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `getAll('p')` (prêmios 1º/2º/3º), `seed`).
-- **Prêmios / sequencial / editar**: o prêmio aceita **1º/2º/3º** (`S.prizes`; o resultado mostra cada
-  posição do pódio). O **sorteio sequencial** (`App.Race.proximo`) tira o vencedor da lista e re-sorteia
-  os restantes (novo sorteio aleatório; `S.drawn` lista quem já saiu). No cadastro dá pra **editar o nome
-  inline** (clique no nome) e **reordenar arrastando** o chip — nada disso afeta o "sorteio justo", que é
-  decidido pela semente.
+- **Prêmios sequenciais / sequencial / editar**: os prêmios (`S.prizes`) formam uma **fila sorteada em
+  ordem** — o vencedor de cada sorteio leva o prêmio nº `S.drawn.length+1` (sorteio 1 → prêmio 1, etc.;
+  **não** é pódio de uma corrida). O **sorteio sequencial** (`App.Race.proximo`) tira o vencedor e
+  re-sorteia os restantes (novo sorteio aleatório); `S.drawn` lista quem já saiu (com o prêmio de cada).
+  No cadastro dá pra **editar o nome inline** (clique no nome) e **reordenar arrastando** o chip — nada
+  disso afeta o "sorteio justo", que é decidido pela semente.
 - **Acessibilidade**: foco visível (`:focus-visible`), `aria-label` nos campos, modal do QR como
   `role="dialog"` (foco entra ao abrir, `Esc` fecha e devolve o foco) e anúncios de resultado por
   `App.View.announce()` (região `#srLive` `aria-live`). Com **`prefers-reduced-motion`**,
