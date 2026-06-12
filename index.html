@@ -20,8 +20,8 @@
 <style>
   /* ===== RESET + TEMA ===== */
   * { box-sizing:border-box; margin:0; padding:0; }
-  :root { --bg:#fff; --surface:#f5f4ef; --border:#e3e1d8; --tp:#2c2c2a; --ts:#6b6a64; --tt:#a3a299; --go:#1D9E75; --go-dark:#0F6E56; --danger:#E24B4A; --fire:#D85A30; }
-  body.dark { --bg:#15161a; --surface:#202128; --border:#34353e; --tp:#e9e8e3; --ts:#a7a69e; --tt:#74736b; --go:#27b487; --go-dark:#22a079; --danger:#e2615f; --fire:#e06a3f; }
+  :root { --bg:#fff; --surface:#f5f4ef; --border:#e3e1d8; --tp:#2c2c2a; --ts:#6b6a64; --tt:#a3a299; --go:#1D9E75; --go-dark:#0F6E56; --danger:#E24B4A; --fire:#D85A30; --gold:#C89117; }
+  body.dark { --bg:#15161a; --surface:#202128; --border:#34353e; --tp:#e9e8e3; --ts:#a7a69e; --tt:#74736b; --go:#27b487; --go-dark:#22a079; --danger:#e2615f; --fire:#e06a3f; --gold:#E0A93A; }
   body.dark .qr-card, body.dark .photo-card { color:#2c2c2a; } /* cartões claros (foto/QR) mantêm texto escuro */
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--tp); padding:24px 16px; min-height:100vh; transition:background .25s ease, color .25s ease; }
   /* Mobile: os controles fixos do canto (tema/tela cheia/som/histórico) não devem cobrir os títulos das telas */
@@ -161,8 +161,29 @@
   .vcard .ve { font-size:56px; animation:bob .6s ease-in-out infinite alternate; }
   @keyframes bob { from{transform:translateY(0) scaleX(-1);} to{transform:translateY(-8px) scaleX(-1);} }
   .vcard .vn { font-size:26px; font-weight:600; } .vcard .vl { font-size:13px; color:var(--go); font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
-  .outros { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .outros { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:wrap; }
   .mini { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:8px; font-size:14px; }
+  /* --- Resultado reformulado: vitória em destaque, prêmio no card, mini-pódio, compartilhar vs semente --- */
+  .vcard.win { border:2px solid var(--gold); padding-top:30px; background:linear-gradient(180deg, rgba(200,145,23,.12), var(--surface) 72%); box-shadow:0 6px 26px rgba(200,145,23,.22); }
+  .vcard .vmedal { font-size:30px; line-height:1; margin-bottom:-4px; }
+  .vcard .vteam { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--ts); margin-top:2px; }
+  .vcard .vteam i { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .vcard .vprize { margin-top:6px; font-size:15px; color:var(--go-dark); } .vcard .vprize b { color:var(--tp); }
+  .podstep { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 18px; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:108px; }
+  .podstep .pmedal { font-size:20px; line-height:1; } .podstep .pe { font-size:32px; } .podstep .pn { font-size:15px; font-weight:600; }
+  .podstep .pprize { font-size:12px; color:var(--go-dark); margin-top:2px; max-width:140px; }
+  .sharebar { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; margin:18px 0 6px; }
+  .sharebar .sharelbl { font-size:13px; color:var(--ts); }
+  .seednote { font-size:12px; color:var(--tt); margin:2px 0 4px; }
+  .seednote .seed-copy { font-size:12px; padding:1px 7px; }
+  .acoes-sec { margin-top:8px; gap:8px; }
+  .acoes-sec .btn { color:var(--ts); }
+  .fulldet { max-width:380px; margin:12px auto; text-align:left; }
+  .fulldet > summary { cursor:pointer; font-size:13px; color:var(--ts); list-style:none; padding:9px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); text-align:center; transition:border-color .15s; }
+  .fulldet > summary::-webkit-details-marker { display:none; }
+  .fulldet > summary:hover, .fulldet > summary:focus-visible { border-color:var(--go); outline:none; }
+  .fulldet[open] > summary { border-radius:10px 10px 0 0; }
+  .fulllist { max-height:280px; overflow:auto; border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; padding:2px 14px; }
   .tstand { max-width:480px; margin:16px auto; text-align:left; }
   .tcrown { text-align:center; font-size:15px; font-weight:600; color:var(--go-dark); margin-bottom:10px; }
   .tbar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
@@ -174,7 +195,7 @@
   .stat { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; min-width:120px; } .sv { font-size:18px; font-weight:600; } .sl { font-size:12px; color:var(--ts); margin-top:2px; }
   .full { max-width:380px; margin:8px auto; text-align:left; max-height:300px; overflow:auto; }
   .full .ft { font-size:12px; color:var(--ts); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
-  .full .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; } .full .row:last-child { border-bottom:none; } .full .row .p { width:30px; font-weight:600; }
+  .full .row, .fulllist .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; } .full .row:last-child, .fulllist .row:last-child { border-bottom:none; } .full .row .p, .fulllist .row .p { width:30px; font-weight:600; }
   .seedline { font-size:13px; color:var(--ts); margin:14px 0; } .seedline code { background:var(--surface); padding:2px 8px; border-radius:6px; }
   .seed-copy { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:var(--tp); background:var(--surface); border:1px solid var(--border); padding:2px 8px; border-radius:6px; cursor:pointer; transition:background .15s, border-color .15s; }
   .seed-copy::after { content:" 📋"; font-size:11px; opacity:.65; }
@@ -316,16 +337,18 @@
       <div id="teamStandings"></div>
       <div id="bracketBox"></div>
       <div class="stats" id="stats"></div>
-      <div class="full" id="full"></div>
+      <div id="full"></div>
       <div class="seedline" id="seedline"></div>
       <div class="linkprev" id="linkPreview" style="display:none"></div>
       <div class="acoes">
-        <button class="btn btn-go" id="btnNova" data-action="novamente">🎲 Novo</button>
-        <button class="btn" id="btnProximo" data-action="proximo" style="display:none">🏅 Tirar vencedor e sortear de novo</button>
-        <button class="btn" data-action="reprisar">↻ Reprisar</button>
-        <button class="btn" data-action="editar">Editar participantes</button>
+        <button class="btn btn-go" id="btnNova" data-action="novamente">🎲 Nova corrida</button>
+        <button class="btn btn-go" id="btnProximo" data-action="proximo" style="display:none">🏅 Próximo ganhador</button>
+      </div>
+      <div class="acoes acoes-sec">
+        <button class="btn btn-sm" data-action="reprisar">↻ Reprisar</button>
+        <button class="btn btn-sm" data-action="editar">✏️ Editar participantes</button>
         <div class="savewrap" id="saveWrap">
-          <button class="btn" data-action="toggleSalvar">💾 Salvar ▾</button>
+          <button class="btn btn-sm" data-action="toggleSalvar">💾 Salvar ▾</button>
           <div id="saveMenu" class="savemenu">
             <div class="savehead">O que deseja salvar?</div>
             <button class="btn btn-sm" data-action="imprimirRanking">📄 PDF do resultado</button>
@@ -1634,30 +1657,54 @@ App.Result = (function(){
     const seqHasNext = seq && !seqAllDone && (S.participantes.length >= 3); // dá p/ disputar o próximo
     D.setText('resSub', seq ? `Sorteio sequencial — prêmio ${seq.idx+1} de ${seq.prizes.length}`
                             : (isTour ? 'Grande final do torneio' : `Corrida com ${S.cavalos.length} participantes`));
-    const medals = ['🥇','🥈','🥉'];
+    // Prêmio de cada colocação: na sequência só o vencedor da corrida leva (o prêmio atual);
+    // no pódio, 1º/2º/3º levam os prêmios posicionais. (Sem prêmios: ninguém.)
+    const prizeForRank = (r) => seq ? (r === 0 ? (seq.prizes[seq.idx] || '') : '') : ((S.prizes || [])[r] || '');
+    // prizeline = só a "linha do tempo" do sequencial; no pódio o prêmio vai no card.
     if (seq) {
       const tail = seqAllDone ? ' — todos entregues 🏁' : (seqHasNext ? '' : ' — sem participantes para o próximo');
       const list = seq.awarded.map((x, i) => { const cur = (i === seq.awarded.length - 1); return `${cur?'🏅':'✅'} <b>${U.esc(x.name)}</b> ${cur?'leva':'levou'}: <b>${U.esc(x.prize)}</b>`; }).join('<br>');
       D.setHTML('prizeline', `<div class="seqhead">Prêmio ${seq.idx+1} de ${seq.prizes.length}${tail}</div>${list}`);
       D.setText('drawnLine', '');
     } else {
-      const plines = (S.prizes || []).map((pr, i) => { if (!pr) return ''; const c = S.cavalos[S.sim.order[i]]; return c ? `${medals[i]} ${U.esc(c.nome)} leva: <b>${U.esc(pr)}</b>` : ''; }).filter(Boolean);
-      D.setHTML('prizeline', plines.join('<br>'));
+      D.setHTML('prizeline', '');
       D.setText('drawnLine', S.drawn.length ? ('🏅 Já sorteados nesta rodada: ' + S.drawn.join(', ')) : '');
     }
+    // "Próximo ganhador" / "Disputar o Nº prêmio": só onde faz sentido — no pódio COM prêmios
+    // definidos, não aparece (você acabou de premiar 1º/2º/3º).
     const bp = D.id('btnProximo');
     if (bp) {
-      bp.style.display = (seq ? seqHasNext : (!isTour && S.participantes.length >= 3)) ? '' : 'none';
-      bp.textContent = seq ? ('🏅 Disputar o ' + (seq.idx + 2) + 'º prêmio') : '🏅 Tirar vencedor e sortear de novo';
+      const hasPodiumPrizes = !seq && (S.prizes || []).filter(Boolean).length > 0;
+      bp.style.display = (seq ? seqHasNext : (!isTour && !hasPodiumPrizes && S.participantes.length >= 3)) ? '' : 'none';
+      bp.textContent = seq ? ('🏅 Disputar o ' + (seq.idx + 2) + 'º prêmio') : '🏅 Próximo ganhador';
     }
-    D.setHTML('podio', `<div class="vcard"><div class="ve">${v.emoji}</div><div class="vn">${U.esc(v.nome)}</div><div class="vl">${isTour?'Campeão':'Vencedor'}</div></div><div class="outros">${S.sim.order.slice(1,3).map((idx,i) => { const c = S.cavalos[idx]; return `<div class="mini">${['🥈','🥉'][i]} <span>${c.emoji}</span> ${U.esc(c.nome)}</div>`; }).join('')}</div>`);
+    // Pódio: vencedor em destaque (ouro) com prêmio e equipe no card; 2º/3º em mini-pódio.
+    const teamTag = (c) => (S.mode === 'teams' && c.team) ? `<div class="vteam"><i style="background:${App.Teams.color(c.team)}"></i>${U.esc(c.team)}</div>` : '';
+    const winPrize = prizeForRank(0);
+    const winHtml = `<div class="vcard win"><div class="vmedal">🥇</div><div class="ve">${v.emoji}</div><div class="vn">${U.esc(v.nome)}</div><div class="vl">${isTour?'Campeão':'Vencedor'}</div>${teamTag(v)}${winPrize?`<div class="vprize">🎁 leva <b>${U.esc(winPrize)}</b></div>`:''}</div>`;
+    const others = S.sim.order.slice(1, 3).map((idx, i) => {
+      const c = S.cavalos[idx], pr = prizeForRank(i + 1);
+      return `<div class="podstep"><div class="pmedal">${['🥈','🥉'][i]}</div><div class="pe">${c.emoji}</div><div class="pn">${U.esc(c.nome)}</div>${pr?`<div class="pprize">🎁 ${U.esc(pr)}</div>`:''}</div>`;
+    }).join('');
+    D.setHTML('podio', winHtml + (others ? `<div class="outros">${others}</div>` : ''));
     D.setHTML('teamStandings', (S.mode === 'teams') ? App.Teams.standingsHtml() : '');
     D.setHTML('bracketBox', isTour ? ('<div class="bk-round" style="max-width:560px;margin:0 auto"><div class="rh" style="text-align:center">Caminho até o título</div></div>' + App.Tournament.bracketHtml()) : '');
-    const ot = U.argmax(S.sim.gain), su = U.argmax(S.sim.surges);
-    D.setHTML('stats', `<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div><div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>${S.sim.close?'<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>':''}`);
-    D.setHTML('full', '<div class="ft">' + (isTour ? 'Classificação da final' : 'Classificação completa') + '</div>' + S.sim.order.map((idx,p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join(''));
+    // Estatísticas só com gente suficiente — uma final de 2 não tem "viradas"/"ultrapassagens".
+    const statCards = [];
+    if (S.cavalos.length >= 4) {
+      const ot = U.argmax(S.sim.gain), su = U.argmax(S.sim.surges);
+      statCards.push(`<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div>`);
+      statCards.push(`<div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div>`);
+      statCards.push(`<div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>`);
+    }
+    if (S.sim.close) statCards.push(`<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>`);
+    D.setHTML('stats', statCards.join(''));
+    // Classificação completa: colapsável (top 3 já estão no pódio) — encurta a tela, ótimo no mobile.
+    const rows = S.sim.order.map((idx, p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join('');
+    D.setHTML('full', `<details class="fulldet"><summary>📋 ${isTour ? 'Classificação da final' : 'Classificação completa'} (${S.sim.order.length})</summary><div class="fulllist">${rows}</div></details>`);
+    // Compartilhar (plateia) em destaque; semente como nota discreta de "sorteio justo".
     const seedShown = isTour ? S.tourBaseSeed : (seq ? seq.base : S.sim.seed);
-    D.setHTML('seedline', `Semente: <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="Clique para copiar a semente">${seedShown}</button> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR</button> <span class="hint">— clique na semente para copiar; reproduza pela URL ou em "Opções avançadas"</span>`);
+    D.setHTML('seedline', `<div class="sharebar"><span class="sharelbl">Compartilhar:</span> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR Code</button></div><div class="seednote">⚖️ Sorteio justo · semente <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="A mesma semente reproduz exatamente este sorteio — prova de que não há truque. Reproduza pelo link ou em &quot;Opções&quot;.">${seedShown}</button></div>`);
     const lp = D.id('linkPreview'); if (lp) { lp.style.display = 'none'; lp.innerHTML = ''; } // limpa preview do resultado anterior
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
