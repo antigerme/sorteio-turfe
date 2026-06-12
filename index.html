@@ -65,7 +65,9 @@
   }
 
   /* ===== ENTRADA / LISTAS ===== */
-  .input-row { display:flex; gap:8px; margin-bottom:10px; }
+  .input-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .input-row #inp { flex:1 1 180px; min-width:0; } .input-row #teamSel { flex:1 1 130px; min-width:0; }
+  @media (max-width:520px){ .m-teams .input-row #inp { flex-basis:100%; } } /* equipes: nome na 1ª linha; equipe + Adicionar na 2ª */
   .tools { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
   .panel { display:none; margin-bottom:14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
   .panel.open { display:block; }
@@ -77,7 +79,8 @@
   .chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:14px; }
   .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; border-radius:4px; padding:1px 4px; margin:-1px -4px; }
   .chip .n:hover { background:var(--bg); }
-  .chip .grip { color:var(--tt); font-size:15px; line-height:1; cursor:grab; touch-action:none; padding:0 1px; user-select:none; flex-shrink:0; }
+  .chip .grip { color:var(--tt); font-size:15px; line-height:1; cursor:grab; touch-action:none; padding:0 2px; user-select:none; flex-shrink:0; }
+  .chip .grip:focus-visible, .chip .n:focus-visible { outline:2px solid var(--go); outline-offset:1px; border-radius:4px; }
   .chip.dragging { opacity:.45; } .chip.dragover { border-color:var(--go); box-shadow:inset 0 0 0 2px var(--go); }
   .chip-edit { flex:1; min-width:0; font-size:14px; font-family:inherit; border:1px solid var(--go); border-radius:6px; padding:3px 7px; background:var(--bg); color:var(--tp); outline:none; }
   .chip .x { cursor:pointer; color:var(--tt); font-size:20px; line-height:1; border:none; background:none; padding:0 2px; } .chip .x:hover { color:var(--danger); }
@@ -123,6 +126,9 @@
   .cav .dot { border-radius:50%; flex-shrink:0; }
   .cav .label { font-weight:600; }
   .cav .tt2 { font-size:9px; color:#fff; border-radius:4px; padding:0 4px; }
+  /* "Pular para o resultado" — flutua durante a corrida; some com a tela (.screen) */
+  .skipbtn { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.28); opacity:.95; }
+  .skipbtn:hover { opacity:1; }
   .badge { border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:600; color:#fff; background:#999; flex-shrink:0; }
 
   /* ===== LARGADA (contagem) + PHOTO FINISH ===== */
@@ -224,6 +230,7 @@
   .savemenu { display:none; position:absolute; bottom:48px; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.14); z-index:30; flex-direction:column; gap:6px; min-width:220px; }
   .savemenu.open { display:flex; }
   .savemenu .savehead { font-size:12px; color:var(--ts); padding:2px 4px 6px; }
+  .savemenu .savehint { font-size:11px; color:var(--fire); padding:5px 4px 0; line-height:1.35; max-width:220px; }
   .savemenu .btn { justify-content:flex-start; width:100%; }
   /* ---- Acessibilidade: foco visível, leitor de tela e movimento reduzido ---- */
   .btn:focus-visible, .mode-btn:focus-visible, .seed-copy:focus-visible, [data-action]:focus-visible { outline:2px solid var(--go); outline-offset:2px; }
@@ -329,6 +336,7 @@
     </div>
     <div class="scene"><div class="sun"></div><div class="stands"></div></div>
     <div class="pista" id="pista"></div>
+    <button class="btn btn-go btn-sm skipbtn" id="btnSkip" data-action="pular" title="Pular para o resultado">⏭️ Pular</button>
   </div>
 
   <!-- ===================== TELA 3: BATERIA (torneio) ===================== -->
@@ -372,6 +380,7 @@
             <button class="btn btn-sm" data-action="imprimirRanking">📄 PDF do resultado</button>
             <button class="btn btn-sm" data-action="certificado">🏆 Certificado (PDF)</button>
             <button class="btn btn-sm" data-action="salvarImagem">🖼️ Imagem (PNG)</button>
+            <div class="savehint" id="pdfHint" style="display:none">⚠️ Sem o gerador de PDF (offline) — os PDFs serão salvos como imagem.</div>
           </div>
         </div>
       </div>
@@ -385,7 +394,7 @@
 <div id="qrModal" role="dialog" aria-modal="true" aria-label="QR Code do sorteio"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas" role="img" aria-label="QR Code do link do sorteio"></canvas><div class="qr-sub" id="qrSub"></div><div class="qr-actions"><button class="btn btn-sm" data-action="baixarQrPng">⬇️ PNG</button><button class="btn btn-sm" data-action="baixarQrSvg">⬇️ SVG</button><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div></div>
 <div id="histModal" role="dialog" aria-modal="true" aria-label="Histórico de sorteios"><div class="hist-card"><div class="hist-head">📜 Histórico de sorteios</div><div id="histBox"></div><div class="hist-foot"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button><button class="btn btn-sm" data-action="fecharHist">Fechar</button></div></div></div>
 <canvas id="confetti" aria-hidden="true" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.warn('[Export] jsPDF não carregou (CDN); exportações de PDF cairão para imagem (PNG).')"></script>
 
 <script>
 "use strict";
@@ -929,7 +938,7 @@ App.Sim = (function(){
 
 /* ===================== Screens — troca de tela ===================== */
 App.Screens = (function(){
-  function show(id){ D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); Log.debug('Screens','tela ativa', { id }); }
+  function show(id){ if (App.FX) App.FX.stop(); D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); Log.debug('Screens','tela ativa', { id }); }
   return { show };
 })();
 
@@ -1053,7 +1062,7 @@ App.Roster = (function(){
     el.innerHTML = hint + S.participantes.map((nm,i) => {
       const tg = (S.mode === 'teams' && S.teamOf[nm]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[nm])}">${U.esc(S.teamOf[nm])}</span>` : '';
       if (i === S.editing) return `<div class="chip editing" data-idx="${i}"><span class="e">🙂</span><input class="chip-edit" data-idx="${i}" value="${U.esc(nm)}" maxlength="40" aria-label="Editar nome"><button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
-      return `<div class="chip" data-idx="${i}"><span class="grip" aria-hidden="true" title="Arraste para reordenar">⠿</span><span class="e">🙂</span><span class="n" data-action="editarNome" data-idx="${i}" title="Clique para editar">${U.esc(nm)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      return `<div class="chip" data-idx="${i}"><span class="grip" tabindex="0" role="button" aria-label="Mover ${U.esc(nm)} — use as setas ↑ e ↓" title="Arraste ou use ↑/↓ para reordenar">⠿</span><span class="e">🙂</span><span class="n" tabindex="0" role="button" data-action="editarNome" data-idx="${i}" aria-label="Editar nome: ${U.esc(nm)}" title="Clique ou Enter para editar">${U.esc(nm)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
     }).join('');
     if (S.editing != null) { const inp = el.querySelector('.chip-edit'); if (inp) { inp.focus(); try { inp.select(); } catch (e) {} D.on(inp, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(inp); } else if (e.key === 'Escape') { S.editing = null; render(); } }); D.on(inp, 'blur', () => commitEdit(inp)); } }
   }
@@ -1116,6 +1125,7 @@ App.Modes = (function(){
     D.setText('modeHint', CFG.MODE_HINTS[m]);
     D.id('teamsBox').style.display = m === 'teams' ? 'block' : 'none';
     D.id('teamSel').style.display = m === 'teams' ? '' : 'none';
+    const sc = D.id('screen-cadastro'); if (sc) sc.classList.toggle('m-teams', m === 'teams'); // evita overflow do input-row no mobile
     const pmw = D.id('prizeModeWrap'); if (pmw) pmw.style.display = (m === 'tournament') ? 'none' : ''; // sequencial não se aplica a torneio
     if (m === 'teams') App.Teams.buildSelect();
     const btn = D.id('btnStart'); if (btn) btn.textContent = m === 'tournament' ? 'Iniciar torneio' : (m === 'teams' ? 'Iniciar (equipes)' : 'Iniciar corrida');
@@ -1286,7 +1296,18 @@ App.PhotoFinish = (function(){
 
 /* ===================== FX — confete/fogos da comemoração ===================== */
 App.FX = (function(){
+  let gen = 0;
+  // Encerra a comemoração: invalida loops em andamento, cancela o RAF e LIMPA/esconde
+  // o canvas — senão o último frame de confete fica "preso" sobre a próxima tela
+  // quando se troca de tela rápido (nova corrida, próximo, reprisar, editar...).
+  function stop(){
+    gen++;
+    if (S.celebRaf) { cancelAnimationFrame(S.celebRaf); S.celebRaf = null; }
+    const cv = D.id('confetti'); if (cv) { const ctx = cv.getContext('2d'); if (ctx) ctx.clearRect(0,0,cv.width,cv.height); cv.style.display = 'none'; }
+  }
   function celebration(){
+    stop();                       // nunca empilha duas comemorações
+    const myGen = gen;
     const cv = D.id('confetti'), ctx = cv.getContext('2d');
     cv.style.display = 'block'; cv.width = window.innerWidth; cv.height = window.innerHeight;
     const cols = ['#534AB7','#D85A30','#1D9E75','#D4537E','#BA7517','#185FA5','#E24B4A','#FAC775'];
@@ -1295,17 +1316,18 @@ App.FX = (function(){
     function firework(x,y){ const c = cols[(Math.random()*cols.length)|0]; for (let i=0;i<36;i++){ const a=i/36*6.28, sp=2+Math.random()*3; parts.push({ fw:1, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, c }); } App.Audio.pop(); }
     const t0 = performance.now(); let lastFw = 0;
     const draw = now => {
+      if (myGen !== gen) return;  // cancelada por nova comemoração ou troca de tela
       const t = now - t0; ctx.clearRect(0,0,cv.width,cv.height);
       if (t-lastFw > 650 && t < 3200){ lastFw = t; firework(Math.random()*cv.width, cv.height*.2 + Math.random()*cv.height*.3); }
       for (let k=parts.length-1;k>=0;k--){ const p = parts[k];
         if (p.fw){ p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=.012; if (p.life<=0){ parts.splice(k,1); continue; } ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,6.28); ctx.fill(); }
         else { p.x+=p.vx; p.y+=p.vy; p.vy+=.04; p.rot+=p.vr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=Math.max(0,1-t/4500); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore(); }
       }
-      if (t < 4600) S.celebRaf = requestAnimationFrame(draw); else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display='none'; }
+      if (t < 4600) S.celebRaf = requestAnimationFrame(draw); else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display='none'; S.celebRaf = null; }
     };
     S.celebRaf = requestAnimationFrame(draw);
   }
-  return { celebration };
+  return { celebration, stop };
 })();
 
 /* ===================== Race — orquestra UMA corrida ===================== */
@@ -1326,7 +1348,7 @@ App.Race = (function(){
   function clearAll(){
     S.gen++;
     if (S.raf) cancelAnimationFrame(S.raf);
-    if (S.celebRaf) cancelAnimationFrame(S.celebRaf);
+    if (App.FX) App.FX.stop(); // encerra e LIMPA o confete (não deixa frame preso na tela)
     clearTimeout(S.narrTimer); App.Timing.clearSeq();
     App.Audio.stopHeart(); App.Audio.crowdStop();
     hideCD(); const fl = D.id('flash'); if (fl) fl.style.display = 'none';
@@ -1418,6 +1440,21 @@ App.Race = (function(){
     Log.info('Race','movimento reduzido — resultado direto', { vencedor:v.nome });
     App.Timing.seq(500, () => afterRace());
   }
+  // Pular: encerra contagem/animação/foto e vai direto ao resultado (mesmo destino
+  // do fim normal — torneio/sequência/single via afterRace). Útil em corridas grandes/mobile.
+  function skip(){
+    if (S.ended || !S.sim) return;
+    App.Timing.clearSeq(); clearTimeout(S.narrTimer);
+    S.ended = true; if (S.raf) cancelAnimationFrame(S.raf);
+    App.Audio.stopHeart(); hideCD();
+    const fl = D.id('flash'); if (fl) fl.style.display = 'none'; // some a foto, se aberta
+    setHeader('Resultado', false);
+    placeFinal();
+    const v = S.cavalos[S.sim.order[0]]; const nv = D.id('narr'); if (nv) { nv.classList.remove('fire'); nv.textContent = '🏁 ' + v.nome + ' venceu!'; }
+    App.Audio.crowdSet(CFG.crowd.end);
+    Log.info('Race','corrida pulada → resultado', { vencedor:v.nome });
+    afterRace();
+  }
   // Fim da corrida: fixa posições/colocações finais; foto se chegada apertada.
   function endRace(){
     if (S.ended) return; S.ended = true;
@@ -1503,7 +1540,7 @@ App.Race = (function(){
   // Volta ao cadastro a partir do resultado.
   function editar(){ clearAll(); S.tour = null; S.seq = null; App.Screens.show('screen-cadastro'); Log.info('Race','voltou ao cadastro'); }
 
-  return { run, clearAll, setHeader, hideCD, iniciar, novamente, reprisar, proximo, editar, seqSeed, prizeModeValue, seqWanted };
+  return { run, clearAll, setHeader, hideCD, skip, iniciar, novamente, reprisar, proximo, editar, seqSeed, prizeModeValue, seqWanted };
 })();
 
 /* ===================== Tournament — baterias e chaveamento ===================== */
@@ -1767,7 +1804,7 @@ App.Result = (function(){
   }
   // Copia a semente para a área de transferência.
   function copySeed(s){ try { navigator.clipboard.writeText('' + s); App.Roster.msg('Semente copiada!', true); Log.info('Result','semente copiada', { seed:s }); } catch (e) { App.Roster.msg('Semente: ' + s, true); Log.warn('Result','clipboard indisponível', e); } }
-  function toggleSave(e){ if (e) e.stopPropagation(); D.id('saveMenu').classList.toggle('open'); }
+  function toggleSave(e){ if (e) e.stopPropagation(); const m = D.id('saveMenu'); const opening = !m.classList.contains('open'); m.classList.toggle('open'); const h = D.id('pdfHint'); if (h && opening) h.style.display = window.jspdf ? 'none' : 'block'; }
   function closeSave(){ const m = D.id('saveMenu'); if (m) m.classList.remove('open'); }
   // Monta a URL que reproduz este sorteio (modo + participantes + prêmio + semente).
   // Os dados vão no FRAGMENTO (#) — que NÃO é enviado no GET (sem limite de servidor),
@@ -1933,6 +1970,7 @@ App.UI = (function(){
     removerEquipe:(el) => App.Teams.remove(+el.dataset.idx),
     // corrida / torneio
     iniciar:          () => App.Race.iniciar(),
+    pular:            () => App.Race.skip(),
     novamente:        () => App.Race.novamente(),
     proximo:          () => App.Race.proximo(),
     reprisar:         () => App.Race.reprisar(),
@@ -2041,6 +2079,7 @@ App.UI = (function(){
       const c = g.closest('.chip'); if (!c || c.dataset.idx == null) return;
       e.preventDefault(); dragSrc = +c.dataset.idx; dragOver = dragSrc; c.classList.add('dragging');
       try { g.setPointerCapture(e.pointerId); } catch (_) {}
+      try { g.focus(); } catch (_) {} // mantém o foco no punho (teclado) apesar do preventDefault
     });
     D.on(lista, 'pointermove', e => {
       if (dragSrc == null) return; e.preventDefault();
@@ -2054,6 +2093,21 @@ App.UI = (function(){
     const endDrag = e => { if (dragSrc == null) return; if (e) e.preventDefault(); const from = dragSrc, to = dragOver; dragSrc = dragOver = null; if (to != null && to !== from) App.Roster.reorder(from, to); else clearMarks(); };
     D.on(lista, 'pointerup', endDrag);
     D.on(lista, 'pointercancel', () => { dragSrc = dragOver = null; clearMarks(); });
+    // Teclado (acessível): reordenar pelo punho (↑/↓/Home/End) e editar pelo nome (Enter/Espaço)
+    D.on(lista, 'keydown', e => {
+      const t = e.target; if (!t || !t.classList) return;
+      if (t.classList.contains('grip')) {
+        const c = t.closest('.chip'); if (!c || c.dataset.idx == null) return;
+        const i = +c.dataset.idx, last = App.State.participantes.length - 1; let to = null;
+        if (e.key === 'ArrowUp') to = i - 1; else if (e.key === 'ArrowDown') to = i + 1;
+        else if (e.key === 'Home') to = 0; else if (e.key === 'End') to = last; else return;
+        e.preventDefault(); if (to < 0 || to > last || to === i) return;
+        App.Roster.reorder(i, to);
+        const g = lista.querySelector(`.chip[data-idx="${to}"] .grip`); if (g) g.focus();
+      } else if (t.classList.contains('n') && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault(); App.Roster.startEdit(+t.dataset.idx);
+      }
+    });
     // Teclado global: Esc fecha o modal do QR e os menus abertos
     D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
