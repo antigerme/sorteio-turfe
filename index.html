@@ -213,7 +213,7 @@
   <!-- ===================== TELA 1: CADASTRO ===================== -->
   <div id="screen-cadastro" class="screen active">
     <h2>🏇 Sorteio (Turfe)</h2>
-    <p class="sub">Sorteios monótonos ficaram no passado. Transforme sua premiação em um evento eletrizante com essa nova mecânica interativa em forma Turfe, onde o público não apenas assiste, mas vive a adrenalina de ver a sorte ser construída ao vivo!</p>
+    <p class="sub">Cada participante vira um cavalo — a corrida decide o sorteio, ao vivo. 🏇</p>
 
     <div class="modesel">
       <button class="mode-btn active" data-mode="single" data-action="setMode">🏇 Corrida única</button>
@@ -231,7 +231,6 @@
       <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
       <button class="btn btn-sm" data-action="limparTudo">🗑️ Limpar tudo</button>
     </div>
-    <div class="hint" id="persistHint" title="Recarregar não perde; 🗑️ Limpar tudo apaga.">💾 Cadastro salvo neste navegador</div>
 
     <div class="panel" id="teamsBox">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -248,20 +247,18 @@
       <button class="btn btn-sm btn-go" data-action="addBulk">Adicionar lista</button>
     </div>
 
-    <label class="fld">🏆 Prêmio(s) — opcional (sorteados em ordem)</label>
-    <input type="text" id="prizeInp" placeholder="1º prêmio (ex.: um fone de ouvido)" maxlength="60" style="width:100%" aria-label="1º prêmio">
-    <div id="prizesExtra" style="display:none;margin-top:8px">
-      <input type="text" id="prizeInp2" placeholder="2º prêmio (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="2º prêmio">
-      <input type="text" id="prizeInp3" placeholder="3º prêmio (opcional)" maxlength="60" style="width:100%" aria-label="3º prêmio">
-    </div>
-    <button class="btn btn-sm" id="prizesToggle" data-action="togglePrizes" style="margin-top:6px">➕ Mais prêmios (2º, 3º...)</button>
-    <div class="hint" style="margin-top:6px">Cada prêmio sai num sorteio: o 1º vencedor leva o 1º prêmio; use <b>"Tirar vencedor e sortear de novo"</b> no resultado para os próximos.</div>
-
     <details id="advOpts">
-      <summary>Opções avançadas — sorteio justo</summary>
-      <label class="fld">Semente (opcional)</label>
+      <summary>🏆 Prêmios, semente e opções</summary>
+      <label class="fld">Prêmio em disputa (opcional)</label>
+      <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio do 1º lugar">
+      <div id="prizesExtra" style="display:none;margin-top:8px">
+        <input type="text" id="prizeInp2" placeholder="Prêmio do 2º lugar (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="Prêmio do 2º lugar">
+        <input type="text" id="prizeInp3" placeholder="Prêmio do 3º lugar (opcional)" maxlength="60" style="width:100%" aria-label="Prêmio do 3º lugar">
+      </div>
+      <button class="btn btn-sm" id="prizesToggle" data-action="togglePrizes" style="margin-top:6px">➕ Prêmios para 2º e 3º lugar</button>
+      <label class="fld" style="margin-top:14px">Semente (opcional)</label>
       <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%" aria-label="Semente do sorteio (opcional)">
-      <div class="hint" style="margin-top:6px">Use a mesma semente para reproduzir exatamente o mesmo sorteio.</div>
+      <div class="hint" style="margin-top:6px">Use a mesma semente para reproduzir exatamente o mesmo sorteio. 💾 Seu cadastro fica salvo neste navegador.</div>
     </details>
 
     <div class="grid" id="lista"></div>
@@ -581,6 +578,7 @@ App.Store = (function(){
       const p2 = D.id('prizeInp2'); if (p2) p2.value = (d.prize2 || '').slice(0,60);
       const p3 = D.id('prizeInp3'); if (p3) p3.value = (d.prize3 || '').slice(0,60);
       if (d.prize2 || d.prize3) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
+      if (d.prize || d.prize2 || d.prize3) { const a = D.id('advOpts'); if (a) a.open = true; }
       const si = D.id('seedInp'); if (si && d.seed && /^\d+$/.test(d.seed)) { si.value = String(d.seed).slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; }
       App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
       App.Roster.msg('↩️ Cadastro restaurado deste navegador — confira, ou 🗑️ limpe.', true);
@@ -648,7 +646,7 @@ App.History = (function(){
     S.mode = (e.mode === 'tournament' || e.mode === 'teams') ? e.mode : 'single';
     try {
       App.Modes.set(S.mode); S.teams.forEach(t => App.Teams.color(t));
-      const pi = D.id('prizeInp'); if (pi) pi.value = e.prize || '';
+      const pi = D.id('prizeInp'); if (pi) pi.value = e.prize || ''; if (e.prize) { const a = D.id('advOpts'); if (a) a.open = true; }
       const si = D.id('seedInp'); if (si && e.seed != null) { si.value = String(e.seed >>> 0); const a = D.id('advOpts'); if (a) a.open = true; }
       App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
       App.Screens.show('screen-cadastro');
@@ -1819,6 +1817,7 @@ App.UI = (function(){
       if (prizes.length) {
         ['prizeInp','prizeInp2','prizeInp3'].forEach((id, i) => { const el = D.id(id); if (el && prizes[i]) el.value = prizes[i].slice(0, 60); });
         if (prizes.length > 1) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
+        const a = D.id('advOpts'); if (a) a.open = true; // prêmios agora vivem em "Opções"
         loaded = true;
       }
       if (loaded) { App.Roster.msg('Sorteio carregado do link — confira e clique em Iniciar ✓', true); Log.info('UI','sorteio carregado da URL', { modo:S.mode, participantes:S.participantes.length, seed }); }
