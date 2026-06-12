@@ -332,9 +332,50 @@ function testExtras(App) {
   ok('reorder para o início', JSON.stringify(S.participantes) === JSON.stringify(['D', 'B', 'C', 'A']));
   App.Roster.startEdit(1); ok('startEdit marca o índice em edição', S.editing === 1); S.editing = null;
   // sequencial: tira o vencedor (caminho terminal com 2 participantes)
-  S.participantes = ['Ana', 'Bruno']; S.cavalos = [{ nome: 'Ana' }, { nome: 'Bruno' }]; S.sim = { order: [0, 1] }; S.drawn = []; S.mode = 'single';
+  S.participantes = ['Ana', 'Bruno']; S.cavalos = [{ nome: 'Ana' }, { nome: 'Bruno' }]; S.sim = { order: [0, 1] }; S.drawn = []; S.mode = 'single'; S.seq = null;
   App.Race.proximo();
   ok('proximo retira o vencedor e registra em drawn', S.drawn[0] === 'Ana' && S.participantes.length === 1 && S.participantes[0] === 'Bruno');
+}
+
+/* ----------------------------------------------------------------------------
+ * 10) Prêmios sequenciais reprodutíveis (uma corrida por prêmio = um só sorteio)
+ * -------------------------------------------------------------------------- */
+function testSeq(App) {
+  section('Prêmios sequenciais (reprodutível)');
+  const S = App.State;
+
+  // Reproduz a sequência como o app faz: corrida k usa seqSeed(base,k) sobre os
+  // restantes; vencedor = restantes[order[0]]; remove o vencedor e segue p/ o próximo prêmio.
+  function winners(base, names, k) {
+    let rem = names.slice(); const out = [];
+    for (let i = 0; i < k && rem.length >= 2; i++) {
+      const seed = App.Race.seqSeed(base, i);
+      const ord = App.Sim.simulate(seed, rem.length).order;
+      const w = rem[ord[0]]; out.push(w); rem = rem.filter(x => x !== w);
+    }
+    return out;
+  }
+  const names = ['Ana', 'Bruno', 'Carla', 'Davi', 'Eva'];
+  const a = winners(12345, names, 3), b = winners(12345, names, 3);
+  ok('sequência de vencedores reprodutível (mesma semente-mestra)', JSON.stringify(a) === JSON.stringify(b), a.join(' → '));
+  ok('3 prêmios ⇒ 3 vencedores distintos da lista', new Set(a).size === 3 && a.every(w => names.includes(w)));
+  ok('semente-mestra diferente ⇒ sequência tende a mudar', JSON.stringify(a) !== JSON.stringify(winners(999, names, 3)));
+
+  // seqSeed: determinístico e com semente própria por corrida (cada prêmio é sorteado à parte)
+  ok('seqSeed(base,k) determinístico', App.Race.seqSeed(7, 0) === App.Race.seqSeed(7, 0) && App.Race.seqSeed(7, 2) === App.Race.seqSeed(7, 2));
+  ok('seqSeed varia entre corridas', App.Race.seqSeed(7, 0) !== App.Race.seqSeed(7, 1));
+
+  // prizeModeValue cai p/ o espelho em S quando não há rádio (ambiente de teste)
+  S.prizeMode = 'podium';
+  ok("prizeModeValue() = 'podium' por padrão (sem DOM)", App.Race.prizeModeValue() === 'podium');
+
+  // Plumbing: proximo numa sequência, caminho terminal (acaba a gente) — sem tocar run()/DOM
+  S.mode = 'single'; S.participantes = ['Ana', 'Bruno']; S.teamOf = {};
+  S.cavalos = [{ nome: 'Ana', emoji: '🏇' }, { nome: 'Bruno', emoji: '🏇' }]; S.sim = { order: [0, 1] }; S.drawn = [];
+  S.seq = { base: 1, original: ['Ana', 'Bruno'], teamOf: {}, prizes: ['P1', 'P2'], idx: 0, awarded: [{ name: 'Ana', emoji: '🏇', prize: 'P1' }] };
+  App.Race.proximo();
+  ok('proximo sequencial remove o vencedor e encerra ao faltar gente', S.participantes.length === 1 && S.participantes[0] === 'Bruno' && S.seq === null);
+  S.seq = null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -350,5 +391,6 @@ testPalette(App);
 testJockeyTone(App);
 testHistory(App);
 testExtras(App);
+testSeq(App);
 console.log('\n' + (failures === 0 ? '==> TUDO OK ✓' : `==> ${failures} FALHA(S) ✗`));
 process.exit(failures === 0 ? 0 : 1);
