@@ -65,7 +65,9 @@
   }
 
   /* ===== ENTRADA / LISTAS ===== */
-  .input-row { display:flex; gap:8px; margin-bottom:10px; }
+  .input-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .input-row #inp { flex:1 1 180px; min-width:0; } .input-row #teamSel { flex:1 1 130px; min-width:0; }
+  @media (max-width:520px){ .m-teams .input-row #inp { flex-basis:100%; } } /* equipes: nome na 1ª linha; equipe + Adicionar na 2ª */
   .tools { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
   .panel { display:none; margin-bottom:14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
   .panel.open { display:block; }
@@ -1123,6 +1125,7 @@ App.Modes = (function(){
     D.setText('modeHint', CFG.MODE_HINTS[m]);
     D.id('teamsBox').style.display = m === 'teams' ? 'block' : 'none';
     D.id('teamSel').style.display = m === 'teams' ? '' : 'none';
+    const sc = D.id('screen-cadastro'); if (sc) sc.classList.toggle('m-teams', m === 'teams'); // evita overflow do input-row no mobile
     const pmw = D.id('prizeModeWrap'); if (pmw) pmw.style.display = (m === 'tournament') ? 'none' : ''; // sequencial não se aplica a torneio
     if (m === 'teams') App.Teams.buildSelect();
     const btn = D.id('btnStart'); if (btn) btn.textContent = m === 'tournament' ? 'Iniciar torneio' : (m === 'teams' ? 'Iniciar (equipes)' : 'Iniciar corrida');
