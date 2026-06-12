@@ -25,8 +25,8 @@ Há três modos:
 - **Única dependência externa**: `jsPDF` via CDN (`cdnjs`), usada apenas para exportar
   PDF/certificado. Todo o resto é **vanilla JS**.
 - **Estado em memória + cadastro persistido**: o estado vive em **`App.State`** (cadastro,
-  corrida, torneio, runtime). Só o **cadastro** (participantes, equipes, prêmio, semente,
-  modo) é salvo no `localStorage` por **`App.Store`** e restaurado ao recarregar (a corrida/
+  corrida, torneio, runtime). Só o **cadastro** (participantes, equipes, prêmios, modo de entrega
+  dos prêmios, semente, modo) é salvo no `localStorage` por **`App.Store`** e restaurado ao recarregar (a corrida/
   torneio/runtime continuam voláteis). Um link compartilhado tem prioridade sobre o rascunho.
   As **preferências de UI** (tema, mudo/voz, volume) também ficam no `localStorage`, numa
   chave própria via `App.Store.pref()`.
@@ -129,13 +129,20 @@ por causa das políticas de autoplay dos navegadores. Não há lint/build; os te
   `CompressionStream`; helpers em `App.Util`) — encurta muito p/ listas grandes (ex.: 100 nomes
   ~3 KB → centenas de bytes). No boot, `App.UI.applyUrlParams` (async) descomprime e
   **pré-preenche** o cadastro (sem auto-iniciar), com fallback p/ fragmento cru `#…` e p/
-  `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `getAll('p')` (prêmios 1º/2º/3º), `seed`).
-- **Prêmios sequenciais / sequencial / editar**: os prêmios (`S.prizes`) formam uma **fila sorteada em
-  ordem** — o vencedor de cada sorteio leva o prêmio nº `S.drawn.length+1` (sorteio 1 → prêmio 1, etc.;
-  **não** é pódio de uma corrida). O **sorteio sequencial** (`App.Race.proximo`) tira o vencedor e
-  re-sorteia os restantes (novo sorteio aleatório); `S.drawn` lista quem já saiu (com o prêmio de cada).
-  No cadastro dá pra **editar o nome inline** (clique no nome) e **reordenar arrastando** o chip — nada
-  disso afeta o "sorteio justo", que é decidido pela semente.
+  `?query` antiga. Parsing reusa `URLSearchParams` (`modo`, `getAll('n')/('t')`, `getAll('p')` (prêmios 1º/2º/3º),
+  `seed`, e `pm=seq` — marca "uma corrida por prêmio", reproduzindo a sequência inteira a partir da semente-mestra).
+- **Prêmios / modo de entrega**: o prêmio aceita **1º/2º/3º** (`S.prizes`). Com **2+ prêmios** (fora do torneio),
+  o seletor **"Como entregar os prêmios?"** (`S.prizeMode`, em "Opções") escolhe entre:
+  - **Numa corrida só** (`podium`) — uma corrida; 1º/2º/3º levam os prêmios (comportamento padrão).
+  - **Uma corrida por prêmio** (`sequential`) — cada prêmio é disputado numa corrida; o vencedor **sai** e os
+    demais disputam o próximo. É **um único sorteio reproduzível**: uma **semente-mestra** (`S.seq.base`) deriva
+    a semente de cada corrida via `App.Race.seqSeed(base, k)` (mesmo padrão do torneio com `S.tourMaster`), então
+    **um só link reproduz a sequência inteira** (link carrega a lista **original** + `pm=seq`; `S.seq` guarda
+    `{base, original, teamOf, prizes, idx, awarded}`). O resultado mostra o **acumulado** de quem levou cada prêmio.
+- **Sequencial livre / editar / reordenar**: fora de uma sequência de prêmios, `App.Race.proximo` ainda faz o
+  **sorteio sequencial livre** (tira o vencedor e re-sorteia os restantes, aleatório; `S.drawn` lista quem já saiu).
+  No cadastro dá pra **editar o nome inline** (clique no nome) e **reordenar arrastando** o chip — nada disso
+  afeta o "sorteio justo", que é decidido pela semente.
 - **Acessibilidade**: foco visível (`:focus-visible`), `aria-label` nos campos, modal do QR como
   `role="dialog"` (foco entra ao abrir, `Esc` fecha e devolve o foco) e anúncios de resultado por
   `App.View.announce()` (região `#srLive` `aria-live`). Com **`prefers-reduced-motion`**,
@@ -185,6 +192,10 @@ Ela carrega o **`index.html` real** num contexto `vm` (com stubs mínimos de DOM
   grade de sementes × `n` (`tests/golden-sim.json`). Mudou a simulação de propósito? rode `--update`.
 - **QR Code**: format info nas posições da ISO (regressão do bug de transposição), estrutura
   (finder patterns), e **round-trip** com um decodificador independente (reescrito pela ISO).
+- **Prêmios sequenciais (reprodutível)**: `App.Race.seqSeed(base,k)` determinístico e com semente
+  própria por corrida; a sequência de vencedores (derivada da semente-mestra) é reprodutível e
+  sensível à semente; e o `proximo` no caminho terminal da sequência.
 
 Complementarmente, dá pra fazer um **teste funcional headless** (Playwright): abrir o `file://`,
-exercitar UI/corrida/torneio/foto e conferir zero `console`/`pageerror`.
+exercitar UI/corrida/torneio/foto, a **sequência de prêmios reaberta por link** (reprodução idêntica)
+e conferir zero `console`/`pageerror`.
