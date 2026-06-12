@@ -49,9 +49,20 @@
 
   /* ===== SELEÇÃO DE MODO ===== */
   .modesel { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
-  .mode-btn { height:40px; padding:0 16px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--tp); font-size:13px; font-weight:500; cursor:pointer; }
+  .mode-btn { height:40px; padding:0 16px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--tp); font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; }
   .mode-btn.active { border-color:var(--go); background:#eaf6f1; color:var(--go-dark); }
+  .mode-btn .ms { display:none; }                 /* rótulo curto — só no mobile */
   .modehint { font-size:12px; color:var(--tt); margin-bottom:14px; }
+  .tournote { font-size:12px; color:var(--go-dark); font-weight:600; margin:-6px 0 14px; }
+  /* No mobile os 3 modos viram um "segmented control" que cabe em uma linha só */
+  @media (max-width:520px){
+    .modesel { gap:0; }
+    .mode-btn { flex:1; min-width:0; padding:0 6px; font-size:12px; border-radius:0; overflow:hidden; text-overflow:ellipsis; }
+    .mode-btn:first-child { border-radius:10px 0 0 10px; }
+    .mode-btn:last-child { border-radius:0 10px 10px 0; }
+    .mode-btn + .mode-btn { border-left:none; }
+    .mode-btn .ml { display:none; } .mode-btn .ms { display:inline; }
+  }
 
   /* ===== ENTRADA / LISTAS ===== */
   .input-row { display:flex; gap:8px; margin-bottom:10px; }
@@ -66,12 +77,18 @@
   .chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:14px; }
   .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; border-radius:4px; padding:1px 4px; margin:-1px -4px; }
   .chip .n:hover { background:var(--bg); }
-  .chip[draggable] { cursor:grab; } .chip.dragging { opacity:.45; }
+  .chip .grip { color:var(--tt); font-size:15px; line-height:1; cursor:grab; touch-action:none; padding:0 1px; user-select:none; flex-shrink:0; }
+  .chip.dragging { opacity:.45; } .chip.dragover { border-color:var(--go); box-shadow:inset 0 0 0 2px var(--go); }
   .chip-edit { flex:1; min-width:0; font-size:14px; font-family:inherit; border:1px solid var(--go); border-radius:6px; padding:3px 7px; background:var(--bg); color:var(--tp); outline:none; }
   .chip .x { cursor:pointer; color:var(--tt); font-size:20px; line-height:1; border:none; background:none; padding:0 2px; } .chip .x:hover { color:var(--danger); }
   .teamtag { font-size:9px; color:#fff; border-radius:4px; padding:1px 6px; }
   #lista { min-height:50px; margin:16px 0; }
   .empty { font-size:13px; color:var(--tt); grid-column:1/-1; padding:8px 0; }
+  .listhint { grid-column:1/-1; font-size:12px; color:var(--tt); margin:-2px 0 2px; }
+  .empty-cta { grid-column:1/-1; padding:6px 2px 12px; }
+  .ec-steps { display:flex; flex-direction:column; gap:9px; margin-bottom:14px; }
+  .ec-step { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--ts); }
+  .ec-num { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--go); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
   details { margin-bottom:14px; } summary { font-size:13px; color:var(--ts); cursor:pointer; }
   .bottom { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:6px; }
   .count { font-size:13px; color:var(--ts); }
@@ -241,11 +258,12 @@
     <p class="sub">Cada participante vira um cavalo — a corrida decide o sorteio, ao vivo. 🏇</p>
 
     <div class="modesel">
-      <button class="mode-btn active" data-mode="single" data-action="setMode">🏇 Corrida única</button>
+      <button class="mode-btn active" data-mode="single" data-action="setMode">🏇 <span class="ml">Corrida única</span><span class="ms">Única</span></button>
       <button class="mode-btn" data-mode="tournament" data-action="setMode">🏆 Torneio</button>
-      <button class="mode-btn" data-mode="teams" data-action="setMode">👥 Por equipes</button>
+      <button class="mode-btn" data-mode="teams" data-action="setMode">👥 <span class="ml">Por equipes</span><span class="ms">Equipes</span></button>
     </div>
     <div class="modehint" id="modeHint">Uma corrida única decide o ganhador.</div>
+    <div class="tournote" id="tourNote" style="display:none"></div>
 
     <div class="input-row">
       <input type="text" id="inp" placeholder="Nome do participante..." maxlength="40" autocomplete="off" aria-label="Nome do participante">
@@ -254,7 +272,7 @@
     </div>
     <div class="tools">
       <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
-      <button class="btn btn-sm" data-action="limparTudo">🗑️ Limpar tudo</button>
+      <button class="btn btn-sm" id="btnClear" data-action="limparTudo">🗑️ Limpar tudo</button>
     </div>
 
     <div class="panel" id="teamsBox">
@@ -1024,17 +1042,56 @@ App.Roster = (function(){
   // Desenha a lista de participantes + atualiza contador e botão "Iniciar".
   function render(){
     App.Store.save(); // persiste o cadastro a cada mudança (no-op até o boot armar)
-    const el = D.id('lista');
-    D.setText('count', S.participantes.length + (S.participantes.length === 1 ? ' participante' : ' participantes'));
-    const btn = D.id('btnStart'); if (btn) btn.disabled = S.participantes.length < 2;
+    const el = D.id('lista'), n = S.participantes.length;
+    D.setText('count', n + (n === 1 ? ' participante' : ' participantes'));
+    const btn = D.id('btnStart'); if (btn) btn.disabled = n < 2;
+    const cb = D.id('btnClear'); if (cb) cb.style.display = n ? '' : 'none'; // "Limpar tudo" só com lista
+    updateTourNote();
     if (!el) return; // sem DOM (ex.: testes em vm)
-    if (!S.participantes.length) { el.innerHTML = '<div class="empty">Nenhum participante ainda. Adicione pelo menos 2 para começar.</div>'; S.editing = null; return; }
-    el.innerHTML = S.participantes.map((n,i) => {
-      const tg = (S.mode === 'teams' && S.teamOf[n]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[n])}">${U.esc(S.teamOf[n])}</span>` : '';
-      if (i === S.editing) return `<div class="chip editing"><span class="e">🙂</span><input class="chip-edit" data-idx="${i}" value="${U.esc(n)}" maxlength="40" aria-label="Editar nome"><button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
-      return `<div class="chip" draggable="true" data-idx="${i}"><span class="e">🙂</span><span class="n" data-action="editarNome" data-idx="${i}" title="Clique para editar; arraste o chip para reordenar">${U.esc(n)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+    if (!n) { el.innerHTML = emptyHtml(); S.editing = null; return; } // estado vazio que convida
+    const hint = n >= 2 ? '<div class="listhint">✎ Toque no nome para editar • ⠿ arraste pelo punho para reordenar</div>' : '';
+    el.innerHTML = hint + S.participantes.map((nm,i) => {
+      const tg = (S.mode === 'teams' && S.teamOf[nm]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[nm])}">${U.esc(S.teamOf[nm])}</span>` : '';
+      if (i === S.editing) return `<div class="chip editing" data-idx="${i}"><span class="e">🙂</span><input class="chip-edit" data-idx="${i}" value="${U.esc(nm)}" maxlength="40" aria-label="Editar nome"><button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      return `<div class="chip" data-idx="${i}"><span class="grip" aria-hidden="true" title="Arraste para reordenar">⠿</span><span class="e">🙂</span><span class="n" data-action="editarNome" data-idx="${i}" title="Clique para editar">${U.esc(nm)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
     }).join('');
     if (S.editing != null) { const inp = el.querySelector('.chip-edit'); if (inp) { inp.focus(); try { inp.select(); } catch (e) {} D.on(inp, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(inp); } else if (e.key === 'Escape') { S.editing = null; render(); } }); D.on(inp, 'blur', () => commitEdit(inp)); } }
+  }
+  // Estado vazio: passo a passo (adaptado ao modo) + botão de nomes de exemplo.
+  function emptyHtml(){
+    const steps = ({
+      single:['Adicione ou cole os nomes dos participantes','Largue a corrida — o cavalo mais rápido vence 🏇','Compartilhe o resultado por link 🔗'],
+      tournament:['Adicione os nomes — eles formam as baterias','Os vencedores avançam até a grande final 🏆','Compartilhe o resultado por link 🔗'],
+      teams:['Crie as equipes no painel acima','Adicione cada participante à sua equipe 👥','Vence o indivíduo e a equipe campeã por pontos 🏆']
+    })[S.mode] || [];
+    const li = steps.map((t,i) => `<div class="ec-step"><span class="ec-num">${i+1}</span><span>${U.esc(t)}</span></div>`).join('');
+    return `<div class="empty-cta"><div class="ec-steps">${li}</div><button class="btn btn-go" data-action="exemplos">🎲 Usar nomes de exemplo</button><div class="hint" style="margin-top:10px">Ou adicione os nomes acima — pelo menos 2 para começar.</div></div>`;
+  }
+  // Torneio: prévia de quantas baterias se formam com a lista atual.
+  function updateTourNote(){
+    const el = D.id('tourNote'); if (!el) return;
+    const n = S.participantes.length;
+    if (S.mode === 'tournament' && n >= 2) {
+      const h = Math.max(1, Math.ceil(n / CFG.MAXHEAT));
+      el.textContent = `🏁 ${n} participantes → ${h} bateria${h > 1 ? 's' : ''}; os vencedores avançam até a final.`;
+      el.style.display = '';
+    } else el.style.display = 'none';
+  }
+  // Preenche com nomes de exemplo (adaptado ao modo) — atalho para experimentar.
+  function exemplos(){
+    if (S.participantes.length) return; // só no estado vazio
+    if (S.mode === 'teams') {
+      let added = 0;
+      [['Marketing',['Ana','Bruno','Carla','Davi']],['Vendas',['Eva','Fábio','Gabi','Hugo']],['Produto',['Ivo','Jana','Lia','Caio']]].forEach(g => {
+        const t = g[0]; if (!S.teams.some(x => x.toLowerCase() === t.toLowerCase())) { S.teams.push(t); App.Teams.color(t); }
+        g[1].forEach(nm => { if (S.participantes.length < MAX && !S.participantes.some(p => p.toLowerCase() === nm.toLowerCase())) { S.participantes.push(nm); S.teamOf[nm] = t; added++; } });
+      });
+      App.Teams.renderChips(); App.Teams.buildSelect(); render(); summary(added, 0, 0);
+    } else {
+      const base = ['Ana','Bruno','Carla','Davi','Eva','Fábio','Gabi','Hugo'];
+      addNames(S.mode === 'tournament' ? base.concat(['Ivo','Jana','Lia','Caio']) : base);
+    }
+    Log.info('Roster','exemplos preenchidos', { mode:S.mode, total:S.participantes.length });
   }
   // Edição inline do nome (clique no nome → input; Enter/blur salva, Esc cancela).
   function startEdit(i){ if (i < 0 || i >= S.participantes.length) return; S.editing = i; render(); }
@@ -1048,7 +1105,7 @@ App.Roster = (function(){
   }
   // Reordenar por arrastar (drag-and-drop): move o participante `from` para a posição `to`.
   function reorder(from, to){ if (from === to || from < 0 || to < 0 || from >= S.participantes.length || to >= S.participantes.length) return; const [m] = S.participantes.splice(from, 1); S.participantes.splice(to, 0, m); Log.info('Roster','reordenado', { from, to }); render(); }
-  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render, startEdit, reorder };
+  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render, startEdit, reorder, exemplos };
 })();
 
 /* ===================== Modes — alterna o modo de sorteio ===================== */
@@ -1860,6 +1917,7 @@ App.UI = (function(){
     setMode:    (el) => App.Modes.set(el.dataset.mode),
     addOne:     () => App.Roster.addOne(),
     addBulk:    () => App.Roster.addBulk(),
+    exemplos:   () => App.Roster.exemplos(),
     limparTudo: () => App.Roster.clear(),
     togglePanel:(el) => togglePanel(el.dataset.arg),
     togglePrizes: () => { const e = D.id('prizesExtra'); if (!e) return; const open = e.style.display !== 'none'; e.style.display = open ? 'none' : 'block'; const b = D.id('prizesToggle'); if (b) b.textContent = open ? '➕ Prêmios para 2º e 3º lugar' : '➖ Esconder 2º e 3º lugar'; },
@@ -1974,12 +2032,28 @@ App.UI = (function(){
     D.on(D.id('seedInp'), 'input', () => App.Store.save());
     // Delegação global de cliques
     D.on(document, 'click', onClick);
-    // Reordenar participantes arrastando (drag-and-drop), delegado no #lista
-    const lista = D.id('lista'); let dragSrc = null;
-    D.on(lista, 'dragstart', e => { const c = e.target.closest('.chip[draggable]'); if (!c) return; dragSrc = +c.dataset.idx; if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(dragSrc)); } catch (_) {} } c.classList.add('dragging'); });
-    D.on(lista, 'dragover', e => { if (dragSrc != null) e.preventDefault(); });
-    D.on(lista, 'drop', e => { e.preventDefault(); const c = e.target.closest('.chip'); if (!c || dragSrc == null || c.dataset.idx == null) { dragSrc = null; return; } App.Roster.reorder(dragSrc, +c.dataset.idx); dragSrc = null; });
-    D.on(lista, 'dragend', () => { const d = lista && lista.querySelector('.dragging'); if (d) d.classList.remove('dragging'); dragSrc = null; });
+    // Reordenar arrastando pelo "punho" (⠿), delegado no #lista — Pointer Events
+    // p/ funcionar também no toque (drag-and-drop nativo não dispara no mobile).
+    const lista = D.id('lista'); let dragSrc = null, dragOver = null;
+    const clearMarks = () => { if (lista) lista.querySelectorAll('.dragging,.dragover').forEach(c => c.classList.remove('dragging','dragover')); };
+    D.on(lista, 'pointerdown', e => {
+      const g = e.target.closest && e.target.closest('.grip'); if (!g) return;
+      const c = g.closest('.chip'); if (!c || c.dataset.idx == null) return;
+      e.preventDefault(); dragSrc = +c.dataset.idx; dragOver = dragSrc; c.classList.add('dragging');
+      try { g.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    D.on(lista, 'pointermove', e => {
+      if (dragSrc == null) return; e.preventDefault();
+      const t = document.elementFromPoint(e.clientX, e.clientY); const c = (t && t.closest) ? t.closest('.chip') : null;
+      const idx = (c && c.dataset.idx != null) ? +c.dataset.idx : null;
+      if (idx === dragOver) return;
+      lista.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover'));
+      if (c && idx !== dragSrc) c.classList.add('dragover');
+      dragOver = idx;
+    });
+    const endDrag = e => { if (dragSrc == null) return; if (e) e.preventDefault(); const from = dragSrc, to = dragOver; dragSrc = dragOver = null; if (to != null && to !== from) App.Roster.reorder(from, to); else clearMarks(); };
+    D.on(lista, 'pointerup', endDrag);
+    D.on(lista, 'pointercancel', () => { dragSrc = dragOver = null; clearMarks(); });
     // Teclado global: Esc fecha o modal do QR e os menus abertos
     D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
