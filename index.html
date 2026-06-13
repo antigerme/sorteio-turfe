@@ -85,6 +85,7 @@
   .chip-edit { flex:1; min-width:0; font-size:14px; font-family:inherit; border:1px solid var(--go); border-radius:6px; padding:3px 7px; background:var(--bg); color:var(--tp); outline:none; }
   .chip .x { cursor:pointer; color:var(--tt); font-size:20px; line-height:1; border:none; background:none; padding:0 2px; } .chip .x:hover { color:var(--danger); }
   .teamtag { font-size:9px; color:#fff; border-radius:4px; padding:1px 6px; }
+  .teamtag.tclick { cursor:pointer; } .teamtag.tclick:focus-visible { outline:2px solid var(--go); outline-offset:1px; }
   #lista { min-height:50px; margin:16px 0; }
   .empty { font-size:13px; color:var(--tt); grid-column:1/-1; padding:8px 0; }
   .listhint { grid-column:1/-1; font-size:12px; color:var(--tt); margin:-2px 0 2px; }
@@ -590,7 +591,7 @@ App.State = {
   // --- Torneio ---
   tour: null, tourMaster: null, tourBaseSeed: null,
   // --- Animação / runtime ---
-  raf: null, celebRaf: null, gen: 0,   // gen invalida loops antigos ao reiniciar
+  raf: null, celebRaf: null, gen: 0, userScrollAt: 0,   // gen invalida loops antigos ao reiniciar
   narrTimer: null, seqTimers: [],
   lastGalope: 0, lastNarr: 0, ended: false
 };
@@ -938,7 +939,7 @@ App.Sim = (function(){
 
 /* ===================== Screens — troca de tela ===================== */
 App.Screens = (function(){
-  function show(id){ if (App.FX) App.FX.stop(); D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); Log.debug('Screens','tela ativa', { id }); }
+  function show(id){ if (App.FX) App.FX.stop(); D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); try { window.scrollTo(0, 0); } catch (_) {} Log.debug('Screens','tela ativa', { id }); }
   return { show };
 })();
 
@@ -958,10 +959,30 @@ App.Teams = (function(){
     Log.info('Teams','equipe removida', { nome:t });
     renderChips(); buildSelect(); App.Roster.render();
   }
+  let editingTeam = null;
   function renderChips(){
     const el = D.id('teamChips'); if (!el) return;
-    if (!S.teams.length) { el.innerHTML = '<div class="empty">Nenhuma equipe criada ainda.</div>'; return; }
-    el.innerHTML = S.teams.map((t,i) => `<div class="chip"><span class="teamtag" style="background:${color(t)}">&nbsp;</span><span class="n">${U.esc(t)}</span><button class="x" data-action="removerEquipe" data-idx="${i}">&times;</button></div>`).join('');
+    if (!S.teams.length) { el.innerHTML = '<div class="empty">Nenhuma equipe criada ainda.</div>'; editingTeam = null; return; }
+    el.innerHTML = S.teams.map((t,i) => {
+      if (i === editingTeam) return `<div class="chip editing"><span class="teamtag" style="background:${color(t)}">&nbsp;</span><input class="chip-edit teamedit" data-idx="${i}" value="${U.esc(t)}" maxlength="24" aria-label="Renomear equipe"><button class="x" data-action="removerEquipe" data-idx="${i}" aria-label="Remover equipe">&times;</button></div>`;
+      return `<div class="chip"><span class="teamtag" style="background:${color(t)}">&nbsp;</span><span class="n" tabindex="0" role="button" data-action="editarEquipe" data-idx="${i}" aria-label="Renomear equipe: ${U.esc(t)}" title="Clique ou Enter para renomear">${U.esc(t)}</span><button class="x" data-action="removerEquipe" data-idx="${i}" aria-label="Remover equipe">&times;</button></div>`;
+    }).join('');
+    if (editingTeam != null) { const inp = el.querySelector('.teamedit'); if (inp) { inp.focus(); try { inp.select(); } catch (e) {} D.on(inp, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(inp); } else if (e.key === 'Escape') { editingTeam = null; renderChips(); } }); D.on(inp, 'blur', () => commitEdit(inp)); } }
+  }
+  // Renomear equipe inline: propaga o novo nome para todos os membros (teamOf) e preserva a cor.
+  function startEdit(i){ if (i < 0 || i >= S.teams.length) return; editingTeam = i; renderChips(); }
+  function commitEdit(inp){
+    if (editingTeam == null || !inp) return;
+    const i = +inp.dataset.idx, old = S.teams[i]; if (old == null) { editingTeam = null; renderChips(); return; }
+    const nv = inp.value.trim().slice(0, 24); editingTeam = null;
+    if (nv && nv.toLowerCase() !== old.toLowerCase() && S.teams.some((t,j) => j !== i && t.toLowerCase() === nv.toLowerCase())) { App.Roster.msg('Já existe a equipe "' + nv + '".', false); renderChips(); return; }
+    if (nv && nv !== old) {
+      S.teams[i] = nv;
+      if (old in S.teamColors) { S.teamColors[nv] = S.teamColors[old]; delete S.teamColors[old]; } // preserva a cor
+      Object.keys(S.teamOf).forEach(k => { if (S.teamOf[k] === old) S.teamOf[k] = nv; });            // membros seguem o nome
+      Log.info('Teams','equipe renomeada', { de:old, para:nv });
+    }
+    renderChips(); buildSelect(); App.Roster.render(); App.Store.save();
   }
   function buildSelect(){
     const s = D.id('teamSel');
@@ -977,7 +998,7 @@ App.Teams = (function(){
       ranked.map(t => { const w = Math.round(score[t]/mx*100); const col = t==='Sem equipe' ? '#9b9a92' : color(t); return `<div class="tbar"><div class="tn"><i style="background:${col}"></i>${U.esc(t)}</div><div class="tt"><span style="width:${w}%;background:${col}"></span></div><div class="ts2">${score[t]} pts</div></div>`; }).join('') +
       `</div>`;
   }
-  return { color, create, remove, renderChips, buildSelect, standingsHtml };
+  return { color, create, remove, renderChips, buildSelect, standingsHtml, startEdit };
 })();
 
 /* ===================== Roster — participantes ===================== */
@@ -1060,7 +1081,7 @@ App.Roster = (function(){
     if (!n) { el.innerHTML = emptyHtml(); S.editing = null; return; } // estado vazio que convida
     const hint = n >= 2 ? '<div class="listhint">✎ Toque no nome para editar • ⠿ arraste pelo punho para reordenar</div>' : '';
     el.innerHTML = hint + S.participantes.map((nm,i) => {
-      const tg = (S.mode === 'teams' && S.teamOf[nm]) ? `<span class="teamtag" style="background:${App.Teams.color(S.teamOf[nm])}">${U.esc(S.teamOf[nm])}</span>` : '';
+      const tg = (S.mode === 'teams' && S.teamOf[nm]) ? `<span class="teamtag tclick" role="button" tabindex="0" data-action="trocarEquipe" data-idx="${i}" style="background:${App.Teams.color(S.teamOf[nm])}" title="Toque para trocar a equipe">${U.esc(S.teamOf[nm])}</span>` : '';
       if (i === S.editing) return `<div class="chip editing" data-idx="${i}"><span class="e">🙂</span><input class="chip-edit" data-idx="${i}" value="${U.esc(nm)}" maxlength="40" aria-label="Editar nome"><button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
       return `<div class="chip" data-idx="${i}"><span class="grip" tabindex="0" role="button" aria-label="Mover ${U.esc(nm)} — use as setas ↑ e ↓" title="Arraste ou use ↑/↓ para reordenar">⠿</span><span class="e">🙂</span><span class="n" tabindex="0" role="button" data-action="editarNome" data-idx="${i}" aria-label="Editar nome: ${U.esc(nm)}" title="Clique ou Enter para editar">${U.esc(nm)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
     }).join('');
@@ -1114,7 +1135,13 @@ App.Roster = (function(){
   }
   // Reordenar por arrastar (drag-and-drop): move o participante `from` para a posição `to`.
   function reorder(from, to){ if (from === to || from < 0 || to < 0 || from >= S.participantes.length || to >= S.participantes.length) return; const [m] = S.participantes.splice(from, 1); S.participantes.splice(to, 0, m); Log.info('Roster','reordenado', { from, to }); render(); }
-  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render, startEdit, reorder, exemplos };
+  // Trocar a equipe de um participante: cicla para a próxima equipe (toque na etiqueta colorida).
+  function cycleTeam(i){
+    if (S.mode !== 'teams' || !S.teams.length || i < 0 || i >= S.participantes.length) return;
+    const n = S.participantes[i], next = S.teams[(S.teams.indexOf(S.teamOf[n]) + 1) % S.teams.length];
+    S.teamOf[n] = next; Log.info('Roster','equipe trocada', { nome:n, para:next }); render();
+  }
+  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render, startEdit, reorder, exemplos, cycleTeam };
 })();
 
 /* ===================== Modes — alterna o modo de sorteio ===================== */
@@ -1395,6 +1422,12 @@ App.Race = (function(){
     S.ended = false; const myGen = S.gen; S.positions = [];
     let simTime = 0; const dur = S.sim.totalSteps * S.sim.STEP; let last = performance.now(), evIdx = 0, reta = false;
     Log.debug('Race','playback iniciado', { dur:Math.round(dur), frames:S.sim.totalSteps });
+    // Auto-scroll: em campos grandes (pista maior que a tela), segue o líder — suave e
+    // sem brigar com o usuário (pausa 1.6s após rolagem manual). Layout fixo na corrida,
+    // então o centro de cada raia é medido UMA vez (sem reflow por frame).
+    const vh = window.innerHeight, docH = document.documentElement.scrollHeight, maxScroll = docH - vh;
+    const canFollow = docH > vh + 80, rowY = [];
+    if (canFollow) for (let i=0;i<S.cavalos.length;i++){ const r = D.id('raia-'+i); rowY[i] = r ? (r.getBoundingClientRect().top + window.scrollY + r.offsetHeight/2) : 0; }
     const loop = now => {
       if (S.ended || S.gen !== myGen) return;           // corrida cancelada/reiniciada
       const dt = Math.min(now-last, 50); last = now;
@@ -1403,6 +1436,11 @@ App.Race = (function(){
       simTime += dt;
       for (let i=0;i<S.positions.length;i++){ const el = D.id('cav-'+i); if (el) el.style.left = S.positions[i].toFixed(2)+'%'; }
       App.Render.updateRanks(S.positions);
+      if (canFollow && performance.now() - (S.userScrollAt || 0) > 1600) {            // segue o líder
+        const lead = U.argmax(S.positions), cur = window.scrollY;
+        const target = Math.max(0, Math.min(rowY[lead] - vh * 0.45, maxScroll));
+        if (Math.abs(target - cur) >= 4) window.scrollTo(0, cur + (target - cur) * 0.12);
+      }
       if (now - S.lastGalope > (reta ? T.galopeReta : T.galopeFlat)) { App.Audio.galope(reta); S.lastGalope = now; }
       if (!reta && lp > S.sim.FIM*CFG.sim.retaAt) { reta = true; onReta(); }
       // dispara eventos cujo passo já foi alcançado (Narração reage via Bus)
@@ -1798,7 +1836,10 @@ App.Result = (function(){
     D.setHTML('full', `<details class="fulldet"><summary>📋 ${isTour ? 'Classificação da final' : 'Classificação completa'} (${S.sim.order.length})</summary><div class="fulllist">${rows}</div></details>`);
     // Compartilhar (plateia) em destaque; semente como nota discreta de "sorteio justo".
     const seedShown = isTour ? S.tourBaseSeed : (seq ? seq.base : S.sim.seed);
-    D.setHTML('seedline', `<div class="sharebar"><span class="sharelbl">Compartilhar:</span> <button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR Code</button></div><div class="seednote">⚖️ Sorteio justo · semente <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="A mesma semente reproduz exatamente este sorteio — prova de que não há truque. Reproduza pelo link ou em &quot;Opções&quot;.">${seedShown}</button></div>`);
+    // No mobile, "Compartilhar" abre a folha nativa (Web Share); sem suporte (desktop), mantém Copiar/QR.
+    const shareBtn = navigator.share ? `<button class="btn btn-sm btn-go" data-action="compartilhar" data-arg="${seedShown}">📤 Compartilhar</button> ` : '';
+    const shareLbl = navigator.share ? '' : '<span class="sharelbl">Compartilhar:</span> ';
+    D.setHTML('seedline', `<div class="sharebar">${shareLbl}${shareBtn}<button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR Code</button></div><div class="seednote">⚖️ Sorteio justo · semente <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="A mesma semente reproduz exatamente este sorteio — prova de que não há truque. Reproduza pelo link ou em &quot;Opções&quot;.">${seedShown}</button></div>`);
     const lp = D.id('linkPreview'); if (lp) { lp.style.display = 'none'; lp.innerHTML = ''; } // limpa preview do resultado anterior
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
@@ -1842,6 +1883,18 @@ App.Result = (function(){
       Log.warn('Result','clipboard indisponível, preview exibido', e);
     }
   }
+  // Compartilhamento nativo (Web Share API) — abre a folha do sistema no mobile.
+  // Cancelar é silencioso; sem suporte ou erro real, cai para "Copiar link".
+  async function share(seed){
+    const url = await buildShareUrl(seed);
+    const v = S.cavalos[S.sim.order[0]];
+    const text = (S.mode === 'tournament' ? '🏆 Campeão: ' : '🏇 Vencedor: ') + (v ? v.nome : '') + (S.prize ? ' — ' + S.prize : '');
+    if (navigator.share) {
+      try { await navigator.share({ title: CFG.APPNAME, text, url }); Log.info('Result','compartilhado (Web Share)'); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; Log.warn('Result','Web Share falhou; caindo p/ copiar', e); }
+    }
+    copyLink(seed);
+  }
   // Preview do link: campo readonly (clica = seleciona tudo) + nº de caracteres.
   function showLinkPreview(url){
     const box = D.id('linkPreview'); if (!box) return;
@@ -1875,7 +1928,7 @@ App.Result = (function(){
   function downloadQrPng(){ const cv = D.id('qrCanvas'); if (!cv || !cv.toBlob) return; cv.toBlob(b => { if (b) { downloadBlob(b, 'sorteio-qr.png'); App.Roster.msg('QR (PNG) baixado!', true); } else App.Roster.msg('Não foi possível gerar o PNG.', false); }); }
   function downloadQrSvg(){ if (!lastQrUrl) return; try { downloadBlob(new Blob([App.QR.svg(lastQrUrl)], { type:'image/svg+xml' }), 'sorteio-qr.svg'); App.Roster.msg('QR (SVG) baixado!', true); } catch (e) { App.Roster.msg('Não foi possível gerar o SVG.', false); Log.warn('Result','SVG do QR falhou', e); } }
   function closeQR(){ const m = D.id('qrModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
-  return { reveal, build, copySeed, copyLink, copyLinkPreview, showQR, closeQR, downloadQrPng, downloadQrSvg, toggleSave, closeSave };
+  return { reveal, build, copySeed, copyLink, share, copyLinkPreview, showQR, closeQR, downloadQrPng, downloadQrSvg, toggleSave, closeSave };
 })();
 
 /* ===================== Export — PDF / certificado / imagem ===================== */
@@ -1966,8 +2019,10 @@ App.UI = (function(){
     limparHist: () => App.History.clear(),
     removerP:   (el) => App.Roster.remove(+el.dataset.idx),
     editarNome: (el) => App.Roster.startEdit(+el.dataset.idx),
+    trocarEquipe:(el) => App.Roster.cycleTeam(+el.dataset.idx),
     criarEquipe:() => App.Teams.create(),
     removerEquipe:(el) => App.Teams.remove(+el.dataset.idx),
+    editarEquipe:(el) => App.Teams.startEdit(+el.dataset.idx),
     // corrida / torneio
     iniciar:          () => App.Race.iniciar(),
     pular:            () => App.Race.skip(),
@@ -1979,6 +2034,7 @@ App.UI = (function(){
     // resultado / exportações
     copiarSemente:   (el) => App.Result.copySeed(el.dataset.arg),
     copiarLink:      (el) => App.Result.copyLink(el.dataset.arg),
+    compartilhar:    (el) => App.Result.share(el.dataset.arg),
     copiarLinkPreview: () => App.Result.copyLinkPreview(),
     mostrarQR:       (el) => App.Result.showQR(el.dataset.arg),
     fecharQR:        () => App.Result.closeQR(),
@@ -2106,9 +2162,16 @@ App.UI = (function(){
         const g = lista.querySelector(`.chip[data-idx="${to}"] .grip`); if (g) g.focus();
       } else if (t.classList.contains('n') && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault(); App.Roster.startEdit(+t.dataset.idx);
+      } else if (t.classList.contains('teamtag') && t.dataset.action === 'trocarEquipe' && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault(); App.Roster.cycleTeam(+t.dataset.idx);
       }
     });
+    // Equipes: renomear pelo teclado (Enter/Espaço no nome do chip da equipe)
+    const tchips = D.id('teamChips'); if (tchips) D.on(tchips, 'keydown', e => { const t = e.target; if (t && t.classList && t.classList.contains('n') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); App.Teams.startEdit(+t.dataset.idx); } });
     // Teclado global: Esc fecha o modal do QR e os menus abertos
+    // Marca rolagem manual (pausa o auto-scroll da corrida pra não brigar com o usuário)
+    const markScroll = () => { S.userScrollAt = performance.now(); };
+    D.on(window, 'wheel', markScroll, { passive:true }); D.on(window, 'touchmove', markScroll, { passive:true });
     D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
     App.View.init();
