@@ -98,6 +98,9 @@
   .count { font-size:13px; color:var(--ts); }
   /* Toast global (feedback transitório) — fixo, visível em qualquer tela */
   .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px); max-width:90vw; background:var(--tp); color:var(--bg); padding:11px 18px; border-radius:10px; font-size:14px; font-weight:600; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.28); opacity:0; pointer-events:none; transition:opacity .22s ease, transform .22s ease; z-index:9999; }
+  .toast.act { pointer-events:auto; display:inline-flex; align-items:center; gap:4px; }
+  .toast .toast-act { margin-left:10px; background:var(--go); color:#fff; border:none; border-radius:7px; padding:6px 12px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .toast .toast-act:hover { background:var(--go-dark); }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .toast.err { background:var(--danger); color:#fff; }
 
@@ -108,6 +111,15 @@
   .raceprize { font-size:13px; color:var(--go-dark); margin-top:2px; }
   .narr { font-size:15px; color:var(--ts); font-style:italic; min-height:22px; transition:opacity .25s,color .3s; margin-top:4px; }
   .narr.fire { color:var(--fire); font-weight:600; font-style:normal; }
+  /* Modo apresentação (tela cheia): textos maiores p/ projetar numa TV/telão */
+  body.presenting .race-head h2 { font-size:38px; }
+  body.presenting .narr { font-size:22px; }
+  body.presenting .reveal-txt { font-size:36px; }
+  body.presenting .reveal-trophy { font-size:84px; }
+  body.presenting .vcard .vn { font-size:40px; }
+  body.presenting .vcard .ve { font-size:82px; }
+  body.presenting .vcard .vl { font-size:16px; }
+  body.presenting .podstep .pn { font-size:20px; } body.presenting .podstep .pe { font-size:44px; }
   .scene { height:46px; border-radius:14px 14px 0 0; background:linear-gradient(#bfe3f2,#e6f3f8); position:relative; overflow:hidden; border:1px solid var(--border); border-bottom:none; }
   .stands { position:absolute; left:0; right:0; bottom:0; height:20px; background:repeating-linear-gradient(90deg,#c8b89a 0,#c8b89a 7px,#b8a888 7px,#b8a888 14px); border-top:2px solid #9a8a6c; }
   .scene .sun { position:absolute; top:6px; right:24px; width:22px; height:22px; border-radius:50%; background:#ffdf7a; }
@@ -148,8 +160,10 @@
   /* ===== MODAL DO QR CODE ===== */
   #qrModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
   #qrModal.open { display:flex; }
-  #histModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
-  #histModal.open { display:flex; }
+  #histModal, #listsModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  #histModal.open, #listsModal.open { display:flex; }
+  .listsave { display:flex; gap:8px; margin-bottom:12px; flex-shrink:0; }
+  .listsave input { flex:1; min-width:0; height:38px; padding:0 12px; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--tp); font-size:14px; }
   .hist-card { background:var(--bg); color:var(--tp); border:1px solid var(--border); border-radius:14px; padding:16px 18px; box-shadow:0 18px 60px rgba(0,0,0,.4); max-width:min(520px,94vw); width:100%; max-height:80vh; display:flex; flex-direction:column; animation:pop .3s ease; }
   .hist-head { font-size:16px; font-weight:700; margin-bottom:6px; }
   .hist-card #histBox { overflow-y:auto; }
@@ -280,6 +294,7 @@
     </div>
     <div class="tools">
       <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
+      <button class="btn btn-sm" id="listsBtn" data-action="abrirListas">📁 Listas</button>
       <button class="btn btn-sm" id="btnClear" data-action="limparTudo">🗑️ Limpar tudo</button>
     </div>
 
@@ -394,6 +409,7 @@
 <div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
 <div id="qrModal" role="dialog" aria-modal="true" aria-label="QR Code do sorteio"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas" role="img" aria-label="QR Code do link do sorteio"></canvas><div class="qr-sub" id="qrSub"></div><div class="qr-actions"><button class="btn btn-sm" data-action="baixarQrPng">⬇️ PNG</button><button class="btn btn-sm" data-action="baixarQrSvg">⬇️ SVG</button><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div></div>
 <div id="histModal" role="dialog" aria-modal="true" aria-label="Histórico de sorteios"><div class="hist-card"><div class="hist-head">📜 Histórico de sorteios</div><div id="histBox"></div><div class="hist-foot"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button><button class="btn btn-sm" data-action="fecharHist">Fechar</button></div></div></div>
+<div id="listsModal" role="dialog" aria-modal="true" aria-label="Listas salvas"><div class="hist-card"><div class="hist-head">📁 Listas salvas</div><div class="listsave"><input id="listName" type="text" maxlength="40" placeholder="Nome da lista (ex.: Turma A)" aria-label="Nome da lista"><button class="btn btn-sm btn-go" data-action="salvarLista">💾 Salvar atual</button></div><div id="listsBox"></div><div class="hist-foot"><span></span><button class="btn btn-sm" data-action="fecharListas">Fechar</button></div></div></div>
 <canvas id="confetti" aria-hidden="true" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.warn('[Export] jsPDF não carregou (CDN); exportações de PDF cairão para imagem (PNG).')"></script>
 
@@ -627,13 +643,14 @@ App.Store = (function(){
     const store = ls(); if (!store) return null;
     try { const raw = store.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch (e) { Log.warn('Store','falha ao ler', e); return null; }
   }
-  function restore(){
-    const d = read(); if (!hasContent(d)) return false;
-    // Estado primeiro (funciona mesmo sem DOM, p/ testes); UI depois, tolerante a falha.
+  // Aplica um snapshot de cadastro ao estado + UI (reusado por restore() e por Listas salvas).
+  // Copia profundamente teamOf/teamColors p/ não aliasar o objeto guardado.
+  function applyData(d){
+    if (!hasContent(d)) return false;
     S.participantes = Array.isArray(d.participantes) ? d.participantes.slice() : [];
-    S.teamOf = (d.teamOf && typeof d.teamOf === 'object') ? d.teamOf : {};
+    S.teamOf = (d.teamOf && typeof d.teamOf === 'object') ? Object.assign({}, d.teamOf) : {};
     S.teams = Array.isArray(d.teams) ? d.teams.slice() : [];
-    S.teamColors = (d.teamColors && typeof d.teamColors === 'object') ? d.teamColors : {};
+    S.teamColors = (d.teamColors && typeof d.teamColors === 'object') ? Object.assign({}, d.teamColors) : {};
     S.mode = (d.mode === 'tournament' || d.mode === 'teams') ? d.mode : 'single';
     S.prizeMode = (d.prizeMode === 'sequential') ? 'sequential' : 'podium';
     try {
@@ -644,10 +661,14 @@ App.Store = (function(){
       if (d.prize2 || d.prize3) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
       if (S.prizeMode === 'sequential') { try { const r = document.querySelector('input[name="prizeMode"][value="sequential"]'); if (r) r.checked = true; const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; } catch (e) {} }
       if (d.prize || d.prize2 || d.prize3) { const a = D.id('advOpts'); if (a) a.open = true; }
-      const si = D.id('seedInp'); if (si && d.seed && /^\d+$/.test(d.seed)) { si.value = String(d.seed).slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; }
+      const si = D.id('seedInp'); if (si) si.value = (d.seed && /^\d+$/.test(d.seed)) ? String(d.seed).slice(0,12) : '';
       App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
-      App.Roster.msg('↩️ Cadastro restaurado deste navegador — confira, ou 🗑️ limpe.', true);
-    } catch (e) { Log.warn('Store','restauração de UI parcial', e); }
+    } catch (e) { Log.warn('Store','aplicação de UI parcial', e); }
+    return true;
+  }
+  function restore(){
+    if (!applyData(read())) return false;
+    try { App.Roster.msg('↩️ Cadastro restaurado deste navegador — confira, ou 🗑️ limpe.', true); } catch (e) {}
     Log.info('Store','cadastro restaurado', { participantes:S.participantes.length, equipes:S.teams.length, modo:S.mode });
     return true;
   }
@@ -666,7 +687,11 @@ App.Store = (function(){
   const HKEY = 'sorteio-turfe:hist:v1';
   function histLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(HKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
   function histSave(arr){ const store = ls(); if (!store) return; try { store.setItem(HKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar histórico', e); } }
-  return { save, restore, clear, arm, snapshot, prefs, pref, histLoad, histSave };
+  // --- Listas salvas / presets (chave própria) ---
+  const LKEY = 'sorteio-turfe:lists:v1';
+  function listsLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(LKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function listsSave(arr){ const store = ls(); if (!store) return; try { store.setItem(LKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar listas', e); } }
+  return { save, restore, clear, arm, snapshot, apply: applyData, prefs, pref, histLoad, histSave, listsLoad, listsSave };
 })();
 
 /* ===================== History — histórico de sorteios ===================== */
@@ -729,6 +754,50 @@ App.History = (function(){
   return { record, list, clear, remove, reopen, open, close, render };
 })();
 
+/* ===================== Lists — listas salvas (presets de cadastro) ===================== */
+/* Salva o cadastro atual com um nome (localStorage, chave própria via App.Store) e permite
+   carregar/remover depois — ótimo p/ quem repete sorteios (turmas, times, sócios). */
+App.Lists = (function(){
+  const MICON = { single:'🏇', tournament:'🏆', teams:'👥' };
+  let lastFocus = null;
+  function all(){ return App.Store.listsLoad(); }
+  function fmtDate(ts){ try { const d = new Date(ts); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); } catch (e) { return ''; } }
+  function saveCurrent(){
+    const inp = D.id('listName'); const name = (inp ? inp.value : '').trim().slice(0, 40);
+    if (!name) { App.Roster.msg('Dê um nome para a lista.', false); if (inp) inp.focus(); return; }
+    const snap = App.Store.snapshot();
+    if (!(snap.participantes && snap.participantes.length)) { App.Roster.msg('Adicione participantes antes de salvar.', false); return; }
+    const entry = { name, ts: Date.now(), data: JSON.parse(JSON.stringify(snap)) }; // cópia independente
+    let arr = all();
+    const idx = arr.findIndex(x => (x.name || '').toLowerCase() === name.toLowerCase());
+    if (idx >= 0) arr[idx] = entry; else arr.unshift(entry);
+    arr = arr.slice(0, 30); App.Store.listsSave(arr);
+    if (inp) inp.value = '';
+    Log.info('Lists','lista salva', { nome:name, total:arr.length });
+    render(); App.Roster.msg(idx >= 0 ? `Lista "${name}" atualizada.` : `Lista "${name}" salva.`, true);
+  }
+  function load(i){
+    const e = all()[i]; if (!e) return;
+    close(); App.Store.apply(e.data); App.Screens.show('screen-cadastro');
+    Log.info('Lists','lista carregada', { nome:e.name });
+    App.Roster.msg(`Lista "${e.name}" carregada — confira e clique em Iniciar ✓`, true);
+  }
+  function remove(i){ const a = all(); if (i < 0 || i >= a.length) return; const n = a[i].name; a.splice(i, 1); App.Store.listsSave(a); render(); App.Roster.msg(`Lista "${n}" removida.`, true); }
+  function render(){
+    const a = all();
+    const btn = D.id('listsBtn'); if (btn) btn.title = 'Listas salvas (' + a.length + ')';
+    const box = D.id('listsBox'); if (!box) return;
+    box.innerHTML = a.length ? a.map((e, i) => {
+      const d = e.data || {}, n = (d.participantes || []).length, tms = (d.teams || []).length;
+      const meta = `${MICON[d.mode] || '🏇'} ${n} part.${tms ? ' · ' + tms + ' equipes' : ''} · ${fmtDate(e.ts)}`;
+      return `<div class="histrow"><div class="histinfo"><b>${U.esc(e.name)}</b><span class="hint">${meta}</span></div><div class="histacts"><button class="btn btn-sm btn-go" data-action="carregarLista" data-idx="${i}">Carregar</button><button class="btn btn-sm" data-action="removerLista" data-idx="${i}" aria-label="Remover lista" title="Remover">🗑️</button></div></div>`;
+    }).join('') : '<div class="empty">Nenhuma lista salva ainda. Dê um nome acima e salve o cadastro atual.</div>';
+  }
+  function open(){ render(); lastFocus = document.activeElement; const m = D.id('listsModal'); if (!m) return; m.classList.add('open'); const inp = D.id('listName'); if (inp) inp.focus(); }
+  function close(){ const m = D.id('listsModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
+  return { saveCurrent, load, remove, render, open, close };
+})();
+
 /* ===================== View — tema (claro/escuro) + tela cheia ===================== */
 /* Chrome visual: alterna tema (persistido em App.Store.pref) e tela cheia (apresentação).
    O tema inicial respeita a preferência salva ou, na 1ª visita, o prefers-color-scheme. */
@@ -754,7 +823,7 @@ App.View = (function(){
       if (r && r.catch) r.catch(e => Log.warn('View','tela cheia negada', e)); // promise pode rejeitar
     } catch (e) { Log.warn('View','tela cheia indisponível', e); }
   }
-  function syncFs(){ const b = D.id('fsBtn'); if (b) { const on = !!fsEl(); b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Sair da tela cheia' : 'Tela cheia (apresentação)'; } }
+  function syncFs(){ const on = !!fsEl(); document.body.classList.toggle('presenting', on); const b = D.id('fsBtn'); if (b) { b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Sair da tela cheia' : 'Tela cheia (apresentação)'; } }
   // Movimento reduzido: respeita o prefers-reduced-motion do sistema (corrida vai direto ao resultado).
   function reducedMotion(){ try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   // Anúncio para leitores de tela via região aria-live (#srLive). Limpa antes p/ forçar releitura.
@@ -1011,9 +1080,20 @@ App.Roster = (function(){
     const el = D.id('toast'); if (!el) return;
     el.textContent = t;
     el.classList.toggle('err', ok === false);
-    el.classList.add('show');
+    el.classList.remove('act'); el.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
+  }
+  // Toast com ação (ex.: "Desfazer"). Fica clicável (act) e dura mais.
+  function msgAction(text, label, fn){
+    const el = D.id('toast'); if (!el) { try { fn && fn(); } catch (e) {} return; }
+    el.classList.remove('err');
+    el.innerHTML = `<span>${U.esc(text)}</span><button type="button" class="toast-act" data-toastundo>${U.esc(label)}</button>`;
+    el.classList.add('show', 'act');
+    const hide = () => el.classList.remove('show', 'act');
+    const btn = el.querySelector('[data-toastundo]'); if (btn) D.on(btn, 'click', () => { hide(); try { fn(); } catch (e) {} });
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(hide, 6000);
   }
   // Quebra um bloco de texto em nomes (vírgula/; /tab/linha) com limite de 40.
   function parseNames(t){ return t.split(/[\n,;\t]+/).map(s => s.trim().slice(0,40)).filter(Boolean); }
@@ -1068,7 +1148,12 @@ App.Roster = (function(){
     D.id('ta').value = '';
   }
   function remove(i){ const n = S.participantes[i]; S.participantes.splice(i,1); delete S.teamOf[n]; Log.info('Roster','removido', { nome:n, total:S.participantes.length }); render(); }
-  function clear(){ S.participantes = []; S.teamOf = {}; Log.info('Roster','lista limpa'); render(); msg('Lista limpa.', true); }
+  function clear(){
+    if (!S.participantes.length) { render(); return; }
+    const snap = { p: S.participantes.slice(), t: Object.assign({}, S.teamOf) }; // p/ desfazer
+    S.participantes = []; S.teamOf = {}; Log.info('Roster','lista limpa', { tinha: snap.p.length }); render();
+    msgAction('Lista limpa.', '↩️ Desfazer', () => { S.participantes = snap.p; S.teamOf = snap.t; Log.info('Roster','limpeza desfeita', { restaurados: snap.p.length }); render(); msg('Lista restaurada.', true); });
+  }
   // Desenha a lista de participantes + atualiza contador e botão "Iniciar".
   function render(){
     App.Store.save(); // persiste o cadastro a cada mudança (no-op até o boot armar)
@@ -1436,10 +1521,12 @@ App.Race = (function(){
       simTime += dt;
       for (let i=0;i<S.positions.length;i++){ const el = D.id('cav-'+i); if (el) el.style.left = S.positions[i].toFixed(2)+'%'; }
       App.Render.updateRanks(S.positions);
-      if (canFollow && performance.now() - (S.userScrollAt || 0) > 1600) {            // segue o líder
-        const lead = U.argmax(S.positions), cur = window.scrollY;
-        const target = Math.max(0, Math.min(rowY[lead] - vh * 0.45, maxScroll));
-        if (Math.abs(target - cur) >= 4) window.scrollTo(0, cur + (target - cur) * 0.12);
+      if (canFollow && performance.now() - (S.userScrollAt || 0) > 1600) {            // segue o PELOTÃO da frente
+        let sy = 0, sw = 0;                                                            // centroide ponderado: menos "tremida" em viradas
+        for (let i=0;i<S.positions.length;i++){ const w = S.positions[i] - (lp - 6); if (w > 0) { sy += rowY[i]*w; sw += w; } }
+        const center = sw > 0 ? sy/sw : rowY[U.argmax(S.positions)], cur = window.scrollY;
+        const target = Math.max(0, Math.min(center - vh * 0.45, maxScroll));
+        if (Math.abs(target - cur) >= 4) window.scrollTo(0, cur + (target - cur) * 0.1);
       }
       if (now - S.lastGalope > (reta ? T.galopeReta : T.galopeFlat)) { App.Audio.galope(reta); S.lastGalope = now; }
       if (!reta && lp > S.sim.FIM*CFG.sim.retaAt) { reta = true; onReta(); }
@@ -2042,6 +2129,11 @@ App.UI = (function(){
     setPrizeMode: (el) => { S.prizeMode = (el.value === 'sequential') ? 'sequential' : 'podium'; App.Store.save(); },
     abrirHist:  () => App.History.open(),
     fecharHist: () => App.History.close(),
+    abrirListas:   () => App.Lists.open(),
+    fecharListas:  () => App.Lists.close(),
+    salvarLista:   () => App.Lists.saveCurrent(),
+    carregarLista: (el) => App.Lists.load(+el.dataset.idx),
+    removerLista:  (el) => App.Lists.remove(+el.dataset.idx),
     reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
     removerHist:(el) => App.History.remove(+el.dataset.idx),
     limparHist: () => App.History.clear(),
@@ -2082,6 +2174,7 @@ App.UI = (function(){
     if (!e.target.closest('#soundWrap')) App.Audio.closeMenu();
     if (e.target.id === 'qrModal') App.Result.closeQR();
     if (e.target.id === 'histModal') App.History.close();
+    if (e.target.id === 'listsModal') App.Lists.close();
     const el = e.target.closest('[data-action]'); if (!el) return;
     const name = el.dataset.action, fn = ACTIONS[name];
     if (!fn) { Log.warn('UI','ação sem handler', { action:name }); return; }
@@ -2200,7 +2293,8 @@ App.UI = (function(){
     // Marca rolagem manual (pausa o auto-scroll da corrida pra não brigar com o usuário)
     const markScroll = () => { S.userScrollAt = performance.now(); };
     D.on(window, 'wheel', markScroll, { passive:true }); D.on(window, 'touchmove', markScroll, { passive:true });
-    D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
+    const ln = D.id('listName'); if (ln) D.on(ln, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); App.Lists.saveCurrent(); } });
+    D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Lists.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
     App.View.init();
     D.on(D.id('volSlider'), 'input', e => App.Audio.setVolume(e.target.value / 100));
