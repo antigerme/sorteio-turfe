@@ -2082,7 +2082,8 @@ App.Export = (function(){
   function resultCanvas(){
     const W = 1080, H = 1080, cx = W/2;
     const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-    const C = { bg:'#15161a', surface:'#202128', border:'#34353e', tp:'#e9e8e3', ts:'#a7a69e', tt:'#74736b', gold:'#E0A93A', green:'#27b487', greenD:'#27b487' };
+    const cs = getComputedStyle(document.body), cv = (n,fb) => (cs.getPropertyValue(n).trim() || fb), dark = document.body.classList.contains('dark');
+    const C = { bg:cv('--bg','#fff'), surface:cv('--surface','#f5f4ef'), border:cv('--border','#e3e1d8'), tp:cv('--tp','#2c2c2a'), ts:cv('--ts','#6b6a64'), tt:cv('--tt','#a3a299'), gold:cv('--gold','#C89117'), green:cv('--go','#1D9E75'), greenD:cv('--go-dark','#0F6E56') };
     const v = S.cavalos[S.sim.order[0]], ord = S.sim.order, isTour = S.mode === 'tournament';
     const rr = (xx,yy,ww,hh,r) => { x.beginPath(); x.moveTo(xx+r,yy); x.arcTo(xx+ww,yy,xx+ww,yy+hh,r); x.arcTo(xx+ww,yy+hh,xx,yy+hh,r); x.arcTo(xx,yy+hh,xx,yy,r); x.arcTo(xx,yy,xx+ww,yy,r); x.closePath(); };
     const fit = (txt,yy,size,weight,color,maxW) => { let s=size; x.font=`${weight} ${s}px sans-serif`; while (x.measureText(txt).width>maxW && s>14){ s-=2; x.font=`${weight} ${s}px sans-serif`; } x.fillStyle=color; x.textAlign='center'; x.fillText(txt,cx,yy); };
@@ -2092,7 +2093,7 @@ App.Export = (function(){
     fit((isTour?'Torneio — ':'') + 'Sorteio em ' + dataHoje(), 134, 24, '', C.ts, W-160);
     // card do vencedor
     const aX=270, aY=176, aW=540, aH=476;
-    x.save(); x.shadowColor='rgba(0,0,0,.5)'; x.shadowBlur=34; x.shadowOffsetY=12; x.fillStyle=C.surface; rr(aX,aY,aW,aH,30); x.fill(); x.restore();
+    x.save(); x.shadowColor = dark ? 'rgba(0,0,0,.5)' : 'rgba(0,0,0,.16)'; x.shadowBlur=34; x.shadowOffsetY=12; x.fillStyle=C.surface; rr(aX,aY,aW,aH,30); x.fill(); x.restore();
     x.lineWidth=4; x.strokeStyle=C.gold; rr(aX,aY,aW,aH,30); x.stroke();
     x.textAlign='center';
     x.font='62px sans-serif'; x.fillStyle=C.tp; x.fillText('🥇', cx, aY+92);
