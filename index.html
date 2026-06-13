@@ -4,6 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sorteio (Turfe)</title>
+<meta name="description" content="Sorteio em formato de corrida de cavalos animada — cada participante vira um cavalo e a corrida decide o ganhador, ao vivo.">
+<!-- Open Graph / Twitter: prévia (genérica) ao compartilhar o link em apps de mensagem.
+     Sem og:image de propósito (mantém o arquivo único) — vira um card de texto. O link em si
+     reproduz o sorteio: os dados vão no fragmento (#), que não chega ao servidor. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sorteio (Turfe)">
+<meta property="og:title" content="🏇 Sorteio (Turfe) — quem será o vencedor?">
+<meta property="og:description" content="Cada participante vira um cavalo e a corrida decide o ganhador, ao vivo. Abra o link para ver o sorteio.">
+<meta property="og:url" content="https://sorteio.felicio.com.br/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="🏇 Sorteio (Turfe)">
+<meta name="twitter:description" content="Cada participante vira um cavalo e a corrida decide o ganhador, ao vivo.">
+<meta name="theme-color" content="#1D9E75">
 <!--
   ============================================================================
   SORTEIO (TURFE) — aplicação de página única (arquivo autocontido).
@@ -1929,11 +1942,8 @@ App.Result = (function(){
     D.setHTML('seedline', `<div class="sharebar">${shareLbl}${shareBtn}<button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR Code</button></div><div class="seednote">⚖️ Sorteio justo · semente <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="A mesma semente reproduz exatamente este sorteio — prova de que não há truque. Reproduza pelo link ou em &quot;Opções&quot;.">${seedShown}</button></div>`);
     const lp = D.id('linkPreview'); if (lp) { lp.style.display = 'none'; lp.innerHTML = ''; } // limpa preview do resultado anterior
     // Pré-computa link e imagem p/ o compartilhar SÍNCRONO (preserva o gesto no iOS). Pronto antes do toque.
-    shareData = { seed: seedShown, url: null, file: null };
-    if (navigator.share) {
-      buildShareUrl(seedShown).then(u => { if (shareData.seed === seedShown) shareData.url = u; }).catch(() => {});
-      if (navigator.canShare) App.Export.resultPngFile().then(f => { if (shareData.seed === seedShown) shareData.file = f; }).catch(() => {});
-    }
+    shareData = { seed: seedShown, url: null };
+    if (navigator.share) buildShareUrl(seedShown).then(u => { if (shareData.seed === seedShown) shareData.url = u; }).catch(() => {});
     D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
   }
   // Copia a semente para a área de transferência.
@@ -1976,25 +1986,20 @@ App.Result = (function(){
       Log.warn('Result','clipboard indisponível, preview exibido', e);
     }
   }
-  // Compartilhamento nativo (Web Share API) — abre a folha do sistema no mobile.
-  // Cancelar é silencioso; sem suporte ou erro real, cai para "Copiar link".
+  // Compartilhamento nativo (Web Share API) — abre a folha do sistema no mobile, enviando o
+  // LINK (que reproduz o sorteio e gera prévia/thumbnail no app de mensagem) + o texto do vencedor.
   // IMPORTANTE: navigator.share precisa ser chamado SÍNCRONO dentro do toque (sem await antes),
-  // senão o iOS/Safari perde o "gesto do usuário" e rejeita (caía no copiar). Por isso a URL e a
-  // imagem são pré-computadas em build() e usadas aqui de forma síncrona.
+  // senão o iOS/Safari perde o "gesto do usuário" e rejeita. Por isso a URL é pré-computada em build().
+  // Cancelar é silencioso; sem suporte ou erro real, cai para "Copiar link".
   function share(seed){
     const v = S.cavalos[S.sim.order[0]];
     const text = (S.mode === 'tournament' ? '🏆 Campeão: ' : '🏇 Vencedor: ') + (v ? v.nome : '') + (S.prize ? ' — ' + S.prize : '');
     const d = (shareData && shareData.seed == seed) ? shareData : null;
-    if (navigator.share && d) {
-      let payload = null;
-      if (d.file && navigator.canShare && navigator.canShare({ files: [d.file] })) payload = { title: CFG.APPNAME, text, files: [d.file] };
-      else if (d.url) payload = { title: CFG.APPNAME, text, url: d.url };
-      if (payload) {
-        navigator.share(payload)
-          .then(() => Log.info('Result','compartilhado (Web Share)', { imagem: !!payload.files }))
-          .catch(e => { if (e && e.name === 'AbortError') return; Log.warn('Result','Web Share falhou; caindo p/ copiar', e); copyLink(seed); });
-        return;
-      }
+    if (navigator.share && d && d.url) {
+      navigator.share({ title: CFG.APPNAME, text, url: d.url })
+        .then(() => Log.info('Result','compartilhado (Web Share, link)'))
+        .catch(e => { if (e && e.name === 'AbortError') return; Log.warn('Result','Web Share falhou; caindo p/ copiar', e); copyLink(seed); });
+      return;
     }
     copyLink(seed); // sem suporte ou pré-computo ainda não pronto
   }
@@ -2014,7 +2019,7 @@ App.Result = (function(){
   }
   // QR Code do link, gerado 100% local (App.QR). Mostra num modal; se a lista
   // for grande demais para caber no QR, avisa p/ usar o "Copiar link".
-  let lastQrUrl = '', lastFocus = null, shareData = { seed:null, url:null, file:null };
+  let lastQrUrl = '', lastFocus = null, shareData = { seed:null, url:null };
   async function showQR(seed){
     try {
       const url = await buildShareUrl(seed); lastQrUrl = url;
@@ -2072,17 +2077,51 @@ App.Export = (function(){
     } catch (e) { Log.error('Export','falha no certificado', e); App.Roster.msg('Não foi possível gerar o PDF, gerando imagem...', true); pngImage(); }
   }
   // Imagem PNG do resultado (fallback universal, via canvas).
-  // Desenha o cartão do resultado num canvas (reusado pelo download e pelo compartilhar-imagem).
+  // Desenha um CARTÃO bonito do resultado (1080×1080, tema escuro como a tela): card do
+  // vencedor com medalha + sprite, pódio 2º/3º e equipe campeã. Usado no "Salvar imagem".
   function resultCanvas(){
-    const v = S.cavalos[S.sim.order[0]]; const c = document.createElement('canvas'); c.width = 900; c.height = 560; const x = c.getContext('2d');
-    x.fillStyle='#f5f4ef'; x.fillRect(0,0,900,560); x.fillStyle='#BA7517'; x.fillRect(0,0,900,8);
-    x.textAlign='center'; x.fillStyle='#2c2c2a'; x.font='bold 34px sans-serif'; x.fillText(APPNAME,450,80);
-    x.font='16px sans-serif'; x.fillStyle='#6b6a64'; x.fillText((S.mode==='tournament'?'Torneio — ':'')+'Sorteio em '+dataHoje(),450,112);
-    x.font='bold 20px sans-serif'; x.fillStyle='#1D9E75'; x.fillText(S.mode==='tournament'?'CAMPEÃO':'VENCEDOR',450,180);
-    x.font='bold 56px sans-serif'; x.fillStyle='#2c2c2a'; x.fillText(v.nome,450,240);
-    if (S.prize){ x.font='18px sans-serif'; x.fillStyle='#0F6E56'; x.fillText('Prêmio: '+S.prize,450,280); }
-    x.font='bold 17px sans-serif'; x.fillStyle='#2c2c2a'; x.textAlign='left'; let yy=350; x.fillText('Classificação:',120,yy);
-    x.font='16px sans-serif'; x.fillStyle='#444'; S.sim.order.slice(0,8).forEach((idx,p) => { yy+=26; x.fillText(`${p+1}º  ${S.cavalos[idx].nome}`,140,yy); });
+    const W = 1080, H = 1080, cx = W/2;
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    const C = { bg:'#15161a', surface:'#202128', border:'#34353e', tp:'#e9e8e3', ts:'#a7a69e', tt:'#74736b', gold:'#E0A93A', green:'#27b487', greenD:'#27b487' };
+    const v = S.cavalos[S.sim.order[0]], ord = S.sim.order, isTour = S.mode === 'tournament';
+    const rr = (xx,yy,ww,hh,r) => { x.beginPath(); x.moveTo(xx+r,yy); x.arcTo(xx+ww,yy,xx+ww,yy+hh,r); x.arcTo(xx+ww,yy+hh,xx,yy+hh,r); x.arcTo(xx,yy+hh,xx,yy,r); x.arcTo(xx,yy,xx+ww,yy,r); x.closePath(); };
+    const fit = (txt,yy,size,weight,color,maxW) => { let s=size; x.font=`${weight} ${s}px sans-serif`; while (x.measureText(txt).width>maxW && s>14){ s-=2; x.font=`${weight} ${s}px sans-serif`; } x.fillStyle=color; x.textAlign='center'; x.fillText(txt,cx,yy); };
+    // fundo + faixa dourada
+    x.fillStyle = C.bg; x.fillRect(0,0,W,H); x.fillStyle = C.gold; x.fillRect(0,0,W,12);
+    fit('🏇 ' + APPNAME, 92, 46, 'bold', C.tp, W-120);
+    fit((isTour?'Torneio — ':'') + 'Sorteio em ' + dataHoje(), 134, 24, '', C.ts, W-160);
+    // card do vencedor
+    const aX=270, aY=176, aW=540, aH=476;
+    x.save(); x.shadowColor='rgba(0,0,0,.5)'; x.shadowBlur=34; x.shadowOffsetY=12; x.fillStyle=C.surface; rr(aX,aY,aW,aH,30); x.fill(); x.restore();
+    x.lineWidth=4; x.strokeStyle=C.gold; rr(aX,aY,aW,aH,30); x.stroke();
+    x.textAlign='center';
+    x.font='62px sans-serif'; x.fillStyle=C.tp; x.fillText('🥇', cx, aY+92);
+    x.font='128px sans-serif'; x.fillText(v.emoji, cx, aY+232);
+    fit(v.nome, aY+318, 60, 'bold', C.tp, aW-70);
+    fit(isTour?'CAMPEÃO':'VENCEDOR', aY+360, 26, 'bold', C.green, aW-70);
+    let cy = aY+404;
+    if (S.mode==='teams' && v.team){ fit('🏵️ '+v.team, cy, 24, 'bold', C.ts, aW-80); cy+=40; }
+    if (S.prize){ fit('🎁 '+S.prize, cy, 24, '', C.greenD, aW-80); }
+    // pódio 2º/3º
+    const pY=688, pW=380, pH=250, gap=80, lX=(W-(pW*2+gap))/2;
+    const pod = (px, idx, medal) => {
+      x.fillStyle=C.surface; rr(px,pY,pW,pH,22); x.fill(); x.lineWidth=1.5; x.strokeStyle=C.border; rr(px,pY,pW,pH,22); x.stroke();
+      const pcx=px+pW/2; x.textAlign='center';
+      x.font='44px sans-serif'; x.fillStyle=C.tp; x.fillText(medal, pcx, pY+66);
+      x.font='74px sans-serif'; x.fillText(S.cavalos[idx].emoji, pcx, pY+150);
+      let s=30, nm=S.cavalos[idx].nome; x.font=`bold ${s}px sans-serif`; while(x.measureText(nm).width>pW-40 && s>14){ s-=2; x.font=`bold ${s}px sans-serif`; } x.fillStyle=C.tp; x.fillText(nm,pcx,pY+208);
+    };
+    if (ord.length>=2) pod(lX, ord[1], '🥈');
+    if (ord.length>=3) pod(lX+pW+gap, ord[2], '🥉');
+    // rodapé: equipe campeã (teams) + url/semente
+    let fy = 990;
+    if (S.mode==='teams'){
+      const N=S.cavalos.length, score={}; ord.forEach((idx,p)=>{ const t=S.cavalos[idx].team||'Sem equipe'; score[t]=(score[t]||0)+(N-p); });
+      const champ=Object.keys(score).sort((a,b)=>score[b]-score[a])[0];
+      if (champ){ fit('🏆 Equipe campeã: '+champ, fy, 26, 'bold', C.green, W-120); fy+=44; }
+    }
+    const seed = isTour ? S.tourBaseSeed : (S.seq ? S.seq.base : (S.sim ? S.sim.seed : ''));
+    fit('sorteio.felicio.com.br · ⚖️ semente ' + seed, fy, 20, '', C.tt, W-100);
     return c;
   }
   // Imagem PNG do resultado (fallback universal, via canvas).
@@ -2091,14 +2130,7 @@ App.Export = (function(){
       resultCanvas().toBlob(b => { const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href=url; a.download='resultado-sorteio.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000); App.Roster.msg('Imagem gerada!', true); Log.info('Export','imagem PNG gerada'); });
     } catch (e) { Log.error('Export','falha na imagem PNG', e); App.Roster.msg('Não foi possível gerar a imagem neste navegador.', false); }
   }
-  // File PNG do resultado (p/ compartilhar imagem via Web Share). Resolve null se indisponível.
-  function resultPngFile(){
-    return new Promise(resolve => {
-      try { resultCanvas().toBlob(b => resolve(b ? new File([b], 'resultado-sorteio.png', { type:'image/png' }) : null)); }
-      catch (e) { Log.warn('Export','resultPngFile falhou', e); resolve(null); }
-    });
-  }
-  return { pdfRanking, certificate, pngImage, resultPngFile };
+  return { pdfRanking, certificate, pngImage };
 })();
 
 /* ===================== UI — fiação (delegação + teclado + init) ===================== */
