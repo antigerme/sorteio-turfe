@@ -282,6 +282,7 @@
       <button class="btn btn-sm" id="optSfx" style="justify-content:flex-start;width:100%" data-action="toggleSfx">✓ 🔊 Ambiente</button>
       <button class="btn btn-sm" id="optVoice" style="justify-content:flex-start;width:100%" data-action="toggleVoice">○ 🗣️ Narração</button>
       <div style="display:flex;align-items:center;gap:8px;padding:4px 4px 2px;font-size:13px">🔈<input type="range" id="volSlider" min="0" max="100" value="100" aria-label="Volume" style="flex:1;cursor:pointer">🔊</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:2px 4px;font-size:12px;color:var(--ts)"><span>🗣️ Voz</span><select id="voiceSel" aria-label="Voz da narração" style="flex:1;min-width:0;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--tp)"></select></div>
     </div>
   </div>
 </div>
@@ -422,7 +423,7 @@
 <div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
 <div id="qrModal" role="dialog" aria-modal="true" aria-label="QR Code do sorteio"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas" role="img" aria-label="QR Code do link do sorteio"></canvas><div class="qr-sub" id="qrSub"></div><div class="qr-actions"><button class="btn btn-sm" data-action="baixarQrPng">⬇️ PNG</button><button class="btn btn-sm" data-action="baixarQrSvg">⬇️ SVG</button><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div></div>
 <div id="histModal" role="dialog" aria-modal="true" aria-label="Histórico de sorteios"><div class="hist-card"><div class="hist-head">📜 Histórico de sorteios</div><div id="histBox"></div><div class="hist-foot"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button><button class="btn btn-sm" data-action="fecharHist">Fechar</button></div></div></div>
-<div id="listsModal" role="dialog" aria-modal="true" aria-label="Listas salvas"><div class="hist-card"><div class="hist-head">📁 Listas salvas</div><div class="listsave"><input id="listName" type="text" maxlength="40" placeholder="Nome da lista (ex.: Turma A)" aria-label="Nome da lista"><button class="btn btn-sm btn-go" data-action="salvarLista">💾 Salvar atual</button></div><div id="listsBox"></div><div class="hist-foot"><span></span><button class="btn btn-sm" data-action="fecharListas">Fechar</button></div></div></div>
+<div id="listsModal" role="dialog" aria-modal="true" aria-label="Listas salvas"><div class="hist-card"><div class="hist-head">📁 Listas salvas</div><div class="listsave"><input id="listName" type="text" maxlength="40" placeholder="Nome da lista (ex.: Turma A)" aria-label="Nome da lista"><button class="btn btn-sm btn-go" data-action="salvarLista">💾 Salvar atual</button></div><div id="listsBox"></div><div class="hist-foot"><div style="display:flex;gap:8px"><button class="btn btn-sm" data-action="exportarListas">⬆️ Exportar</button><button class="btn btn-sm" data-action="importarListas">⬇️ Importar</button></div><button class="btn btn-sm" data-action="fecharListas">Fechar</button></div><input type="file" id="listsFile" accept="application/json,.json" style="display:none"></div></div>
 <canvas id="confetti" aria-hidden="true" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.warn('[Export] jsPDF não carregou (CDN); exportações de PDF cairão para imagem (PNG).')"></script>
 
@@ -808,7 +809,39 @@ App.Lists = (function(){
   }
   function open(){ render(); lastFocus = document.activeElement; const m = D.id('listsModal'); if (!m) return; m.classList.add('open'); const inp = D.id('listName'); if (inp) inp.focus(); }
   function close(){ const m = D.id('listsModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
-  return { saveCurrent, load, remove, render, open, close };
+  // Exporta todas as listas salvas como .json (backup / levar p/ outro dispositivo).
+  function exportFile(){
+    const data = all(); if (!data.length) { App.Roster.msg('Nenhuma lista salva para exportar.', false); return; }
+    try {
+      const blob = new Blob([JSON.stringify({ v:1, kind:'sorteio-listas', lists:data }, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href=url; a.download='sorteio-listas.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+      Log.info('Lists','listas exportadas', { total:data.length }); App.Roster.msg(`${data.length} lista(s) exportada(s).`, true);
+    } catch (e) { Log.error('Lists','falha ao exportar', e); App.Roster.msg('Não foi possível exportar.', false); }
+  }
+  // Importa listas de um .json (mescla por nome; importada substitui a de mesmo nome).
+  function importFile(file){
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const incoming = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.lists) ? parsed.lists : null);
+        const valid = (incoming || []).filter(e => e && typeof e.name === 'string' && e.data && Array.isArray(e.data.participantes));
+        if (!valid.length) { App.Roster.msg('Nenhuma lista válida no arquivo.', false); return; }
+        let arr = all(), add = 0, upd = 0;
+        valid.forEach(e => {
+          const entry = { name: e.name.slice(0,40), ts: e.ts || Date.now(), data: e.data };
+          const idx = arr.findIndex(x => (x.name||'').toLowerCase() === entry.name.toLowerCase());
+          if (idx >= 0) { arr[idx] = entry; upd++; } else { arr.unshift(entry); add++; }
+        });
+        arr = arr.slice(0, 30); App.Store.listsSave(arr); render();
+        Log.info('Lists','listas importadas', { add, upd });
+        App.Roster.msg(`Importado: ${add} nova(s)${upd ? ', ' + upd + ' atualizada(s)' : ''}.`, true);
+      } catch (e) { Log.error('Lists','falha ao importar', e); App.Roster.msg('Não consegui ler o arquivo (JSON inválido).', false); }
+    };
+    reader.readAsText(file);
+  }
+  return { saveCurrent, load, remove, render, open, close, exportFile, importFile };
 })();
 
 /* ===================== View — tema (claro/escuro) + tela cheia ===================== */
@@ -880,7 +913,7 @@ App.Bus = (function(){
    após interação do usuário (políticas de autoplay). Estado de áudio fica
    encapsulado aqui (ctx, master, mudo, voz, torcida, batimento).            */
 App.Audio = (function(){
-  let ctx = null, master = null, muted = false, voiceOn = false, volume = 1, crowd = null, crowdGain = null, heartTimer = null;
+  let ctx = null, master = null, muted = false, voiceOn = false, volume = 1, crowd = null, crowdGain = null, heartTimer = null, chosenVoiceURI = null;
 
   // Garante o AudioContext + nó master. Retorna o ctx (ou null se indisponível).
   function ensure(){
@@ -903,8 +936,8 @@ App.Audio = (function(){
   function toggleVoice(){ voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); persist(); Log.info('Audio','narração '+(voiceOn?'ON':'OFF')); applyState(); }
   function setVolume(v){ volume = Math.max(0, Math.min(1, +v || 0)); muted = (volume === 0); persist(); applyState(); }
   function persist(){ try { App.Store.pref('vol', volume); App.Store.pref('muted', muted); App.Store.pref('voice', voiceOn); } catch (e) {} }
-  function loadPrefs(){ try { const pv = App.Store.pref('vol'); if (typeof pv === 'number') volume = Math.max(0, Math.min(1, pv)); const pm = App.Store.pref('muted'); if (typeof pm === 'boolean') muted = pm; const po = App.Store.pref('voice'); if (typeof po === 'boolean') voiceOn = po; } catch (e) {} applyState(); }
-  function toggleMenu(e){ if (e) e.stopPropagation(); const m = D.id('soundMenu'); m.style.display = m.style.display === 'flex' ? 'none' : 'flex'; }
+  function loadPrefs(){ try { const pv = App.Store.pref('vol'); if (typeof pv === 'number') volume = Math.max(0, Math.min(1, pv)); const pm = App.Store.pref('muted'); if (typeof pm === 'boolean') muted = pm; const po = App.Store.pref('voice'); if (typeof po === 'boolean') voiceOn = po; const pu = App.Store.pref('voiceURI'); if (typeof pu === 'string') chosenVoiceURI = pu; } catch (e) {} populateVoices(); applyState(); }
+  function toggleMenu(e){ if (e) e.stopPropagation(); const m = D.id('soundMenu'); const open = m.style.display !== 'flex'; m.style.display = open ? 'flex' : 'none'; if (open) populateVoices(); }
   function closeMenu(){ const m = D.id('soundMenu'); if (m) m.style.display = 'none'; }
 
   // ---- Primitivas de síntese ----
@@ -936,11 +969,32 @@ App.Audio = (function(){
       else if (speechSynthesis.speaking || speechSynthesis.pending) return;
       const V = CFG.voice;
       const u = new SpeechSynthesisUtterance(t); u.lang='pt-BR'; u.rate = prio?V.ratePrio:V.rate; u.pitch = prio?V.pitchPrio:V.pitch; u.volume = V.volume;
-      const vs = speechSynthesis.getVoices();
-      const v = vs.find(x=>/pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name)) || vs.find(x=>/^pt/i.test(x.lang));
-      if (v) u.voice = v;
+      const v = pickVoice(); if (v) u.voice = v;
       speechSynthesis.speak(u);
     } catch (e) { Log.warn('Audio','falha na narração por voz', e); }
+  }
+  // Voz da narração: usa a escolhida pelo usuário (se houver), senão a melhor pt-BR/pt automática.
+  function pickVoice(){
+    let vs = []; try { vs = speechSynthesis.getVoices(); } catch (e) { return null; }
+    if (chosenVoiceURI) { const c = vs.find(x => x.voiceURI === chosenVoiceURI); if (c) return c; }
+    return vs.find(x => /pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name) && x.localService)
+        || vs.find(x => /pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name))
+        || vs.find(x => /^pt/i.test(x.lang) && x.localService)
+        || vs.find(x => /^pt/i.test(x.lang)) || null;
+  }
+  function populateVoices(){
+    const sel = D.id('voiceSel'); if (!sel) return;
+    let vs = []; try { vs = speechSynthesis.getVoices(); } catch (e) {}
+    const pt = vs.filter(x => /^pt/i.test(x.lang)), list = pt.length ? pt : vs;
+    if (!list.length) { sel.innerHTML = '<option value="">(voz padrão do sistema)</option>'; return; }
+    const auto = pickVoice();
+    sel.innerHTML = `<option value="">Automática${auto ? ' — ' + U.esc(auto.name) : ''}</option>` +
+      list.map(x => `<option value="${U.esc(x.voiceURI)}"${x.voiceURI === chosenVoiceURI ? ' selected' : ''}>${U.esc(x.name)} (${U.esc(x.lang)})</option>`).join('');
+  }
+  function setVoice(uri){
+    chosenVoiceURI = uri || null; try { App.Store.pref('voiceURI', chosenVoiceURI); } catch (e) {}
+    populateVoices(); Log.info('Audio','voz escolhida', { uri:chosenVoiceURI });
+    if (voiceOn) { try { speechSynthesis.cancel(); } catch (e) {} say('Voz da narração selecionada.', true); }
   }
 
   // Ruído de torcida em loop, com ganho ajustável por fase.
@@ -951,7 +1005,7 @@ App.Audio = (function(){
   function stopHeart(){ if (heartTimer){ clearInterval(heartTimer); heartTimer=null; } }
 
   return {
-    ensure, applyState, toggleSfx, toggleVoice, setVolume, loadPrefs, toggleMenu, closeMenu,
+    ensure, applyState, toggleSfx, toggleVoice, setVolume, setVoice, populateVoices, loadPrefs, toggleMenu, closeMenu,
     bugle, gun, bell, galope, applause, winnerFanfare, drumroll, cymbal, shutter, heartbeat,
     reactOhh, reactCheer, pop, click, say, beep,
     crowdStart, crowdSet, crowdStop, startHeart, stopHeart
@@ -2167,6 +2221,8 @@ App.UI = (function(){
     salvarLista:   () => App.Lists.saveCurrent(),
     carregarLista: (el) => App.Lists.load(+el.dataset.idx),
     removerLista:  (el) => App.Lists.remove(+el.dataset.idx),
+    exportarListas:() => App.Lists.exportFile(),
+    importarListas:() => { const f = D.id('listsFile'); if (f) f.click(); },
     reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
     removerHist:(el) => App.History.remove(+el.dataset.idx),
     limparHist: () => App.History.clear(),
@@ -2327,13 +2383,15 @@ App.UI = (function(){
     const markScroll = () => { S.userScrollAt = performance.now(); };
     D.on(window, 'wheel', markScroll, { passive:true }); D.on(window, 'touchmove', markScroll, { passive:true });
     const ln = D.id('listName'); if (ln) D.on(ln, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); App.Lists.saveCurrent(); } });
+    const lf = D.id('listsFile'); if (lf) D.on(lf, 'change', e => { const f = e.target.files && e.target.files[0]; App.Lists.importFile(f); e.target.value = ''; });
     D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Lists.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
     // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
     App.View.init();
     D.on(D.id('volSlider'), 'input', e => App.Audio.setVolume(e.target.value / 100));
     App.Audio.loadPrefs();
     // Vozes da narração (carregamento assíncrono em alguns navegadores)
-    if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); } catch (e) {} }
+    if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); App.Audio.populateVoices(); }; } catch (e) {} }
+    const vsel = D.id('voiceSel'); if (vsel) D.on(vsel, 'change', e => App.Audio.setVoice(e.target.value));
     // Render inicial
     App.Roster.render(); App.Teams.renderChips(); App.History.render();
     // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável; assíncrono p/ descomprimir)
