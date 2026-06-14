@@ -329,7 +329,9 @@
 
     <details id="advOpts">
       <summary>🏆 Prêmios, semente e opções</summary>
-      <label class="fld">Prêmio em disputa (opcional)</label>
+      <label class="fld">Nome do evento (opcional)</label>
+      <input type="text" id="eventInp" placeholder="Ex.: Sorteio da Festa Junina 2026" maxlength="60" style="width:100%" aria-label="Nome do evento">
+      <label class="fld" style="margin-top:14px">Prêmio em disputa (opcional)</label>
       <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio do 1º lugar">
       <div id="prizesExtra" style="display:none;margin-top:8px">
         <input type="text" id="prizeInp2" placeholder="Prêmio do 2º lugar (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="Prêmio do 2º lugar">
@@ -345,6 +347,7 @@
       <label class="fld" style="margin-top:14px">Semente (opcional)</label>
       <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%" aria-label="Semente do sorteio (opcional)">
       <div class="hint" style="margin-top:6px">Use a mesma semente para reproduzir exatamente o mesmo sorteio. 💾 Seu cadastro fica salvo neste navegador.</div>
+      <label class="pmopt" style="margin-top:14px"><input type="checkbox" id="noRepeatChk" aria-label="Não sortear quem já ganhou"><span>🚫 <b>Não sortear quem já ganhou</b> — lembra os ganhadores entre sorteios (corrida única/equipes)<span id="noRepeatInfo" class="hint"></span></span></label>
     </details>
 
     <div class="grid" id="lista"></div>
@@ -608,6 +611,9 @@ App.State = {
   teamColors: {},      // equipe -> cor
   prize: '',           // prêmio do 1º lugar (compat); ver `prizes`
   prizes: [],          // prêmios por posição [1º, 2º, 3º]
+  eventName: '',       // nome do evento (opcional) — aparece no resultado/imagem/compartilhar/PDF
+  noRepeat: false,     // "não repetir ganhadores" — exclui quem já ganhou (lista persistida)
+  lastPool: null,      // pool efetivo do último sorteio (p/ "Reprisar" reproduzir com no-repeat)
   mode: 'single',      // 'single' | 'tournament' | 'teams'
   // --- Corrida atual ---
   cavalos: [],         // [{nome, team, emoji, cor, idx}]
@@ -641,7 +647,7 @@ App.Store = (function(){
   function snapshot(){
     const pi = D.id('prizeInp'), si = D.id('seedInp');
     return { v:1, participantes:S.participantes, teamOf:S.teamOf, teams:S.teams, teamColors:S.teamColors,
-             mode:S.mode, prize: pi ? pi.value : (S.prize||''),
+             mode:S.mode, event: (D.id('eventInp')||{}).value || (S.eventName||''), prize: pi ? pi.value : (S.prize||''),
              prize2: (D.id('prizeInp2')||{}).value || '', prize3: (D.id('prizeInp3')||{}).value || '',
              prizeMode: App.Race.prizeModeValue(), seed: si ? si.value.trim() : '' };
   }
@@ -669,12 +675,13 @@ App.Store = (function(){
     S.prizeMode = (d.prizeMode === 'sequential') ? 'sequential' : 'podium';
     try {
       App.Modes.set(S.mode);
+      const ei = D.id('eventInp'); if (ei) ei.value = (d.event || '').slice(0,60); S.eventName = (d.event || '').slice(0,60);
       const pi = D.id('prizeInp'); if (pi) pi.value = (d.prize || '').slice(0,60);
       const p2 = D.id('prizeInp2'); if (p2) p2.value = (d.prize2 || '').slice(0,60);
       const p3 = D.id('prizeInp3'); if (p3) p3.value = (d.prize3 || '').slice(0,60);
       if (d.prize2 || d.prize3) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
       if (S.prizeMode === 'sequential') { try { const r = document.querySelector('input[name="prizeMode"][value="sequential"]'); if (r) r.checked = true; const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; } catch (e) {} }
-      if (d.prize || d.prize2 || d.prize3) { const a = D.id('advOpts'); if (a) a.open = true; }
+      if (d.event || d.prize || d.prize2 || d.prize3) { const a = D.id('advOpts'); if (a) a.open = true; }
       const si = D.id('seedInp'); if (si) si.value = (d.seed && /^\d+$/.test(d.seed)) ? String(d.seed).slice(0,12) : '';
       App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
     } catch (e) { Log.warn('Store','aplicação de UI parcial', e); }
@@ -705,7 +712,11 @@ App.Store = (function(){
   const LKEY = 'sorteio-turfe:lists:v1';
   function listsLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(LKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
   function listsSave(arr){ const store = ls(); if (!store) return; try { store.setItem(LKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar listas', e); } }
-  return { save, restore, clear, arm, snapshot, apply: applyData, prefs, pref, histLoad, histSave, listsLoad, listsSave };
+  // --- Ganhadores anteriores ("não repetir") — chave própria ---
+  const WKEY = 'sorteio-turfe:winners:v1';
+  function winnersLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(WKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function winnersSave(arr){ const store = ls(); if (!store) return; try { store.setItem(WKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar ganhadores', e); } }
+  return { save, restore, clear, arm, snapshot, apply: applyData, prefs, pref, histLoad, histSave, listsLoad, listsSave, winnersLoad, winnersSave };
 })();
 
 /* ===================== History — histórico de sorteios ===================== */
@@ -1669,6 +1680,7 @@ App.Race = (function(){
       if (S.tour.isFinal) { App.Result.reveal(); } else { App.Tournament.showHeatResult(w); }
     } else {
       if (S.seq) { const w = S.cavalos[S.sim.order[0]]; S.seq.awarded.push({ name:w.nome, emoji:w.emoji, prize:S.seq.prizes[S.seq.idx] || '' }); }
+      else markWinner(S.cavalos[S.sim.order[0]].nome); // "não repetir": registra o ganhador (no-op se off)
       App.Result.reveal();
     }
   }
@@ -1704,12 +1716,25 @@ App.Race = (function(){
 
   // ---- Controles (chamados pelo UI) ----
   const teamLabel = () => S.mode === 'teams' ? '👥 Corrida por equipes' : '';
+  // "Não repetir ganhadores": exclui quem já ganhou (lista persistida). Vale p/ corrida única/equipes
+  // (não p/ torneio nem sequência de prêmios). O link compartilhado reproduz exatamente o que correu.
+  function excludedNames(){ return App.Store.winnersLoad(); }
+  function effectivePool(){ if (!S.noRepeat) return S.participantes.slice(); const ex = new Set(excludedNames().map(n => n.toLowerCase())); return S.participantes.filter(n => !ex.has(n.toLowerCase())); }
+  function markWinner(name){ if (!S.noRepeat || !name) return; const arr = excludedNames(); if (!arr.some(n => n.toLowerCase() === name.toLowerCase())) { arr.push(name); App.Store.winnersSave(arr); Log.info('Race','ganhador registrado (não repetir)', { name, total:arr.length }); } updateNoRepeatInfo(); }
+  function updateNoRepeatInfo(){ const el = D.id('noRepeatInfo'); if (!el) return; const n = excludedNames().length; el.innerHTML = n ? ` — ${n} já ganhou(aram) <button type="button" class="seed-copy" data-action="limparGanhadores" style="font-size:11px;padding:0 6px">limpar</button>` : ''; }
+  function setNoRepeat(on){ S.noRepeat = !!on; try { App.Store.pref('noRepeat', S.noRepeat); } catch (e) {} updateNoRepeatInfo(); Log.info('Race','não repetir ' + (S.noRepeat ? 'ON' : 'OFF')); }
+  function clearWinners(){ App.Store.winnersSave([]); updateNoRepeatInfo(); App.Roster.msg('Ganhadores anteriores limpos.', true); Log.info('Race','ganhadores limpos'); }
+  function initNoRepeat(){ S.noRepeat = !!App.Store.pref('noRepeat'); const nc = D.id('noRepeatChk'); if (nc) nc.checked = S.noRepeat; updateNoRepeatInfo(); }
   // Inicia o sorteio: torneio, sequência de prêmios reprodutível, ou corrida única (pódio).
   function startDraw(forceRandom){
+    S.eventName = (D.id('eventInp') ? D.id('eventInp').value.trim().slice(0,60) : '') || '';
     S.drawn = [];
     if (S.mode === 'tournament') { S.seq = null; App.Tournament.start(chosenSeed(forceRandom)); return; }
     if (seqWanted()) { startSeq(chosenSeed(forceRandom)); return; }
-    S.seq = null; S.lastSeed = chosenSeed(forceRandom); run(S.participantes, S.lastSeed, teamLabel());
+    S.seq = null; S.lastSeed = chosenSeed(forceRandom);
+    const pool = effectivePool();
+    if (pool.length < 2) { App.Roster.msg('🚫 Todos já ganharam — limpe os ganhadores nas Opções p/ sortear de novo.', false); return; }
+    S.lastPool = pool; run(pool, S.lastSeed, teamLabel());
   }
   function iniciar(){ startDraw(false); }   // respeita a semente do campo (se houver)
   function novamente(){ startDraw(true); }   // força sorteio novo (semente aleatória)
@@ -1727,12 +1752,12 @@ App.Race = (function(){
   function reprisar(){
     if (S.seq) { S.participantes = S.seq.original.slice(); S.teamOf = Object.assign({}, S.seq.teamOf); startSeq(S.seq.base); return; }
     if (S.lastSeed == null) return;
-    if (S.mode === 'tournament') { App.Tournament.start(S.lastSeed); } else { run(S.participantes, S.lastSeed, S.mode==='teams'?'👥 Corrida por equipes':''); }
+    if (S.mode === 'tournament') { App.Tournament.start(S.lastSeed); } else { run(S.lastPool || S.participantes, S.lastSeed, S.mode==='teams'?'👥 Corrida por equipes':''); }
   }
   // Volta ao cadastro a partir do resultado.
   function editar(){ clearAll(); S.tour = null; S.seq = null; App.Screens.show('screen-cadastro'); Log.info('Race','voltou ao cadastro'); }
 
-  return { run, clearAll, setHeader, hideCD, skip, iniciar, novamente, reprisar, proximo, editar, seqSeed, prizeModeValue, seqWanted };
+  return { run, clearAll, setHeader, hideCD, skip, iniciar, novamente, reprisar, proximo, editar, seqSeed, prizeModeValue, seqWanted, setNoRepeat, clearWinners, initNoRepeat };
 })();
 
 /* ===================== Tournament — baterias e chaveamento ===================== */
@@ -1937,7 +1962,7 @@ App.Result = (function(){
   // Monta o conteúdo do resultado (pódio, equipes, chaveamento, stats, lista, semente).
   function build(){
     const v = S.cavalos[S.sim.order[0]], isTour = (S.mode === 'tournament');
-    D.setText('resTitle', isTour ? '🏆 Campeão do torneio' : '🏆 Resultado do sorteio');
+    D.setText('resTitle', S.eventName ? ('🏆 ' + S.eventName) : (isTour ? '🏆 Campeão do torneio' : '🏆 Resultado do sorteio'));
     const seq = S.seq;
     const seqAllDone = seq && (seq.idx + 1 >= seq.prizes.length);          // todos os prêmios entregues
     const seqHasNext = seq && !seqAllDone && (S.participantes.length >= 3); // dá p/ disputar o próximo
@@ -2013,11 +2038,11 @@ App.Result = (function(){
     const base = location.href.split(/[?#]/)[0];
     const seq = S.seq;
     const p = new URLSearchParams();
-    p.set('modo', S.mode); p.set('seed', seed);
+    p.set('modo', S.mode); p.set('seed', seed); if (S.eventName) p.set('ev', S.eventName);
     if (seq) p.set('pm', 'seq');
     const prizes = seq ? seq.prizes : (S.prizes && S.prizes.length ? S.prizes : [S.prize]);
     prizes.filter(Boolean).forEach(pr => p.append('p', pr));
-    const names = seq ? seq.original : S.participantes;
+    const names = seq ? seq.original : (S.cavalos && S.cavalos.length ? S.cavalos.map(c => c.nome) : S.participantes);
     const teamOf = seq ? seq.teamOf : S.teamOf;
     names.forEach(n => { p.append('n', n); if (S.mode === 'teams') p.append('t', teamOf[n] || ''); });
     const q = p.toString();
@@ -2047,7 +2072,7 @@ App.Result = (function(){
   // Cancelar é silencioso; sem suporte ou erro real, cai para "Copiar link".
   function share(seed){
     const v = S.cavalos[S.sim.order[0]];
-    const text = (S.mode === 'tournament' ? '🏆 Campeão: ' : '🏇 Vencedor: ') + (v ? v.nome : '') + (S.prize ? ' — ' + S.prize : '');
+    const text = (S.eventName ? S.eventName + ' — ' : '') + (S.mode === 'tournament' ? '🏆 Campeão: ' : '🏇 Vencedor: ') + (v ? v.nome : '') + (S.prize ? ' — ' + S.prize : '');
     const d = (shareData && shareData.seed == seed) ? shareData : null;
     if (navigator.share && d && d.url) {
       navigator.share({ title: CFG.APPNAME, text, url: d.url })
@@ -2104,7 +2129,7 @@ App.Export = (function(){
     if (!window.jspdf) { App.Roster.msg('PDF indisponível, gerando imagem...', true); pngImage(); return; }
     try {
       const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit:'mm', format:'a4' }); const W = 210; let y = 22; const v = S.cavalos[S.sim.order[0]];
-      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(44,44,42); doc.text(APPNAME, W/2, y, {align:'center'}); y += 8;
+      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(44,44,42); doc.text(S.eventName || APPNAME, W/2, y, {align:'center'}); y += 8;
       doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(110,110,110); doc.text((S.mode==='tournament'?'Torneio — ':'')+'Sorteio em '+dataHoje(), W/2, y, {align:'center'}); y += 14;
       doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(29,158,117); doc.text((S.mode==='tournament'?'Campeao: ':'Vencedor: ')+v.nome, 20, y); y += 8;
       if (S.prize) { doc.setFontSize(11); doc.setTextColor(15,110,86); doc.text('Premio: '+S.prize, 20, y); y += 8; }
@@ -2143,7 +2168,7 @@ App.Export = (function(){
     const fit = (txt,yy,size,weight,color,maxW) => { let s=size; x.font=`${weight} ${s}px sans-serif`; while (x.measureText(txt).width>maxW && s>14){ s-=2; x.font=`${weight} ${s}px sans-serif`; } x.fillStyle=color; x.textAlign='center'; x.fillText(txt,cx,yy); };
     // fundo + faixa dourada
     x.fillStyle = C.bg; x.fillRect(0,0,W,H); x.fillStyle = C.gold; x.fillRect(0,0,W,12);
-    fit('🏇 ' + APPNAME, 92, 46, 'bold', C.tp, W-120);
+    fit('🏇 ' + (S.eventName || APPNAME), 92, 46, 'bold', C.tp, W-120);
     fit((isTour?'Torneio — ':'') + 'Sorteio em ' + dataHoje(), 134, 24, '', C.ts, W-160);
     // card do vencedor
     const aX=270, aY=176, aW=540, aH=476;
@@ -2223,6 +2248,7 @@ App.UI = (function(){
     removerLista:  (el) => App.Lists.remove(+el.dataset.idx),
     exportarListas:() => App.Lists.exportFile(),
     importarListas:() => { const f = D.id('listsFile'); if (f) f.click(); },
+    limparGanhadores:() => App.Race.clearWinners(),
     reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
     removerHist:(el) => App.History.remove(+el.dataset.idx),
     limparHist: () => App.History.clear(),
@@ -2303,6 +2329,8 @@ App.UI = (function(){
       }
       const seed = (p.get('seed') || p.get('semente') || '').trim();
       if (/^\d+$/.test(seed)) { D.id('seedInp').value = seed.slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
+      const ev = (p.get('ev') || '').trim().slice(0,60);
+      if (ev) { const ei = D.id('eventInp'); if (ei) ei.value = ev; S.eventName = ev; const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
       const prizes = p.getAll('p').map(s => s.trim()).filter(Boolean);
       if (prizes.length) {
         ['prizeInp','prizeInp2','prizeInp3'].forEach((id, i) => { const el = D.id(id); if (el && prizes[i]) el.value = prizes[i].slice(0, 60); });
@@ -2392,6 +2420,8 @@ App.UI = (function(){
     // Vozes da narração (carregamento assíncrono em alguns navegadores)
     if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); App.Audio.populateVoices(); }; } catch (e) {} }
     const vsel = D.id('voiceSel'); if (vsel) D.on(vsel, 'change', e => App.Audio.setVoice(e.target.value));
+    const nrc = D.id('noRepeatChk'); if (nrc) D.on(nrc, 'change', () => App.Race.setNoRepeat(nrc.checked));
+    App.Race.initNoRepeat();
     // Render inicial
     App.Roster.render(); App.Teams.renderChips(); App.History.render();
     // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável; assíncrono p/ descomprimir)
