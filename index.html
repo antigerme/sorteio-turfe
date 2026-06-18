@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorteio (Turfe)</title>
+<meta name="description" content="Sorteio em formato de corrida de cavalos animada — cada participante vira um cavalo e a corrida decide o ganhador, ao vivo.">
+<!-- Open Graph / Twitter: prévia (genérica) ao compartilhar o link em apps de mensagem.
+     Sem og:image de propósito (mantém o arquivo único) — vira um card de texto. O link em si
+     reproduz o sorteio: os dados vão no fragmento (#), que não chega ao servidor. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sorteio (Turfe)">
+<meta property="og:title" content="🏇 Sorteio (Turfe) — quem será o vencedor?">
+<meta property="og:description" content="Cada participante vira um cavalo e a corrida decide o ganhador, ao vivo. Abra o link para ver o sorteio.">
+<meta property="og:url" content="https://sorteio.felicio.com.br/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="🏇 Sorteio (Turfe)">
+<meta name="twitter:description" content="Cada participante vira um cavalo e a corrida decide o ganhador, ao vivo.">
+<meta name="theme-color" content="#1D9E75">
+<!--
+  ============================================================================
+  SORTEIO (TURFE) — aplicação de página única (arquivo autocontido).
+  Sorteio em formato de corrida de cavalos animada. Sem build, sem backend.
+  Única dependência externa: jsPDF (via CDN), só para exportar PDF.
+
+  ORGANIZAÇÃO (ver bloco grande de comentário no topo do <script>):
+    HTML  -> 4 telas (#screen-cadastro, #screen-corrida, #screen-heat, #res)
+    CSS   -> tema (:root) + telas + pista/cavalos/pódio/foto/confete
+    JS    -> namespace único `App` com módulos de responsabilidade única.
+  Botões usam `data-action` (sem onclick inline); o UI faz a delegação.
+  ============================================================================
+-->
+<style>
+  /* ===== RESET + TEMA ===== */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#fff; --surface:#f5f4ef; --border:#e3e1d8; --tp:#2c2c2a; --ts:#6b6a64; --tt:#a3a299; --go:#1D9E75; --go-dark:#0F6E56; --danger:#E24B4A; --fire:#D85A30; --gold:#C89117; }
+  body.dark { --bg:#15161a; --surface:#202128; --border:#34353e; --tp:#e9e8e3; --ts:#a7a69e; --tt:#74736b; --go:#27b487; --go-dark:#22a079; --danger:#e2615f; --fire:#e06a3f; --gold:#E0A93A; }
+  body.dark .qr-card, body.dark .photo-card { color:#2c2c2a; } /* cartões claros (foto/QR) mantêm texto escuro */
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--tp); padding:24px 16px; min-height:100vh; transition:background .25s ease, color .25s ease; }
+  /* Mobile: os controles fixos do canto (tema/tela cheia/som/histórico) não devem cobrir os títulos das telas */
+  @media (max-width:520px){ body { padding-top:58px; } }
+  #app { max-width:820px; margin:0 auto; }
+  .screen { display:none; } .screen.active { display:block; }
+  h2 { font-size:22px; font-weight:600; margin-bottom:6px; }
+  .sub { font-size:14px; color:var(--ts); margin-bottom:16px; line-height:1.5; }
+  .hint { font-size:12px; color:var(--tt); }
+
+  /* ===== FORMULÁRIOS ===== */
+  input[type=text], select { height:42px; padding:0 14px; font-size:15px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--tp); outline:none; font-family:inherit; }
+  input[type=text] { flex:1; } select { font-size:14px; }
+  input[type=text]:focus, select:focus { border-color:var(--go); box-shadow:0 0 0 3px rgba(29,158,117,.12); }
+  textarea { width:100%; min-height:110px; padding:12px 14px; font-size:14px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--tp); outline:none; font-family:inherit; resize:vertical; line-height:1.6; }
+  textarea:focus { border-color:var(--go); box-shadow:0 0 0 3px rgba(29,158,117,.12); }
+  label.fld { display:block; font-size:13px; color:var(--ts); margin:14px 0 6px; }
+
+  /* ===== BOTÕES ===== */
+  .btn { height:42px; padding:0 20px; border-radius:10px; font-size:14px; font-weight:500; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--tp); font-family:inherit; transition:background .15s,border-color .15s; display:inline-flex; align-items:center; gap:6px; }
+  .btn:hover { background:var(--surface); } .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-sm { height:36px; padding:0 14px; font-size:13px; }
+  .btn-go { background:var(--go); color:#fff; border-color:var(--go); }
+  .btn-go:hover:not(:disabled){ background:var(--go-dark); border-color:var(--go-dark); }
+
+  /* ===== SELEÇÃO DE MODO ===== */
+  .modesel { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .mode-btn { height:40px; padding:0 16px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--tp); font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; }
+  .mode-btn.active { border-color:var(--go); background:#eaf6f1; color:var(--go-dark); }
+  .mode-btn .ms { display:none; }                 /* rótulo curto — só no mobile */
+  .modehint { font-size:12px; color:var(--tt); margin-bottom:14px; }
+  .tournote { font-size:12px; color:var(--go-dark); font-weight:600; margin:-6px 0 14px; }
+  /* No mobile os 3 modos viram um "segmented control" que cabe em uma linha só */
+  @media (max-width:520px){
+    .modesel { gap:0; }
+    .mode-btn { flex:1; min-width:0; padding:0 6px; font-size:12px; border-radius:0; overflow:hidden; text-overflow:ellipsis; }
+    .mode-btn:first-child { border-radius:10px 0 0 10px; }
+    .mode-btn:last-child { border-radius:0 10px 10px 0; }
+    .mode-btn + .mode-btn { border-left:none; }
+    .mode-btn .ml { display:none; } .mode-btn .ms { display:inline; }
+  }
+
+  /* ===== ENTRADA / LISTAS ===== */
+  .input-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .input-row #inp { flex:1 1 180px; min-width:0; } .input-row #teamSel { flex:1 1 130px; min-width:0; }
+  @media (max-width:520px){ .m-teams .input-row #inp { flex-basis:100%; } } /* equipes: nome na 1ª linha; equipe + Adicionar na 2ª */
+  .tools { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .panel { display:none; margin-bottom:14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+  .panel.open { display:block; }
+  .histrow { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 2px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .histrow:last-of-type { border-bottom:none; }
+  .histinfo { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .histacts { display:flex; gap:6px; flex-shrink:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; }
+  .chip { display:flex; align-items:center; gap:8px; padding:9px 11px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:14px; }
+  .chip .e { font-size:18px; } .chip .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; border-radius:4px; padding:1px 4px; margin:-1px -4px; }
+  .chip .n:hover { background:var(--bg); }
+  .chip .grip { color:var(--tt); font-size:15px; line-height:1; cursor:grab; touch-action:none; padding:0 2px; user-select:none; flex-shrink:0; }
+  .chip .grip:focus-visible, .chip .n:focus-visible { outline:2px solid var(--go); outline-offset:1px; border-radius:4px; }
+  .chip.dragging { opacity:.45; } .chip.dragover { border-color:var(--go); box-shadow:inset 0 0 0 2px var(--go); }
+  .chip-edit { flex:1; min-width:0; font-size:14px; font-family:inherit; border:1px solid var(--go); border-radius:6px; padding:3px 7px; background:var(--bg); color:var(--tp); outline:none; }
+  .chip .x { cursor:pointer; color:var(--tt); font-size:20px; line-height:1; border:none; background:none; padding:0 2px; } .chip .x:hover { color:var(--danger); }
+  .teamtag { font-size:9px; color:#fff; border-radius:4px; padding:1px 6px; }
+  .teamtag.tclick { cursor:pointer; } .teamtag.tclick:focus-visible { outline:2px solid var(--go); outline-offset:1px; }
+  #lista { min-height:50px; margin:16px 0; }
+  .empty { font-size:13px; color:var(--tt); grid-column:1/-1; padding:8px 0; }
+  .listhint { grid-column:1/-1; font-size:12px; color:var(--tt); margin:-2px 0 2px; }
+  .empty-cta { grid-column:1/-1; padding:6px 2px 12px; }
+  .ec-steps { display:flex; flex-direction:column; gap:9px; margin-bottom:14px; }
+  .ec-step { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--ts); }
+  .ec-num { flex-shrink:0; width:22px; height:22px; border-radius:50%; background:var(--go); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  details { margin-bottom:14px; } summary { font-size:13px; color:var(--ts); cursor:pointer; }
+  .bottom { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:6px; }
+  .count { font-size:13px; color:var(--ts); }
+  /* Toast global (feedback transitório) — fixo, visível em qualquer tela */
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px); max-width:90vw; background:var(--tp); color:var(--bg); padding:11px 18px; border-radius:10px; font-size:14px; font-weight:600; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.28); opacity:0; pointer-events:none; transition:opacity .22s ease, transform .22s ease; z-index:9999; }
+  .toast.act { pointer-events:auto; display:inline-flex; align-items:center; gap:4px; }
+  .toast .toast-act { margin-left:10px; background:var(--go); color:#fff; border:none; border-radius:7px; padding:6px 12px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .toast .toast-act:hover { background:var(--go-dark); }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.err { background:var(--danger); color:#fff; }
+
+  /* ===== CORRIDA (pista, cavalos) ===== */
+  .race-head { margin-bottom:12px; }
+  .racelabel { font-size:13px; color:var(--fire); font-weight:600; margin-bottom:2px; min-height:16px; }
+  .race-head h2 { transition:color .3s; } .race-head h2.fire { color:var(--fire); }
+  .raceprize { font-size:13px; color:var(--go-dark); margin-top:2px; }
+  .narr { font-size:15px; color:var(--ts); font-style:italic; min-height:22px; transition:opacity .25s,color .3s; margin-top:4px; }
+  .narr.fire { color:var(--fire); font-weight:600; font-style:normal; }
+  /* Modo apresentação (tela cheia): textos maiores p/ projetar numa TV/telão */
+  body.presenting .race-head h2 { font-size:38px; }
+  body.presenting .narr { font-size:22px; }
+  body.presenting .reveal-txt { font-size:36px; }
+  body.presenting .reveal-trophy { font-size:84px; }
+  body.presenting .vcard .vn { font-size:40px; }
+  body.presenting .vcard .ve { font-size:82px; }
+  body.presenting .vcard .vl { font-size:16px; }
+  body.presenting .podstep .pn { font-size:20px; } body.presenting .podstep .pe { font-size:44px; }
+  .scene { height:46px; border-radius:14px 14px 0 0; background:linear-gradient(#bfe3f2,#e6f3f8); position:relative; overflow:hidden; border:1px solid var(--border); border-bottom:none; }
+  .stands { position:absolute; left:0; right:0; bottom:0; height:20px; background:repeating-linear-gradient(90deg,#c8b89a 0,#c8b89a 7px,#b8a888 7px,#b8a888 14px); border-top:2px solid #9a8a6c; }
+  .scene .sun { position:absolute; top:6px; right:24px; width:22px; height:22px; border-radius:50%; background:#ffdf7a; }
+  .pista { background:#e8dcc6; border:1px solid var(--border); border-radius:0 0 14px 14px; overflow:hidden; padding:6px 0; }
+  .pista.reta { background:#ecd9bd; }
+  .raia { position:relative; display:flex; align-items:center; border-bottom:1px dashed rgba(0,0,0,.08); transition:background .4s; }
+  .raia:last-child { border-bottom:none; }
+  .raia-n { width:30px; text-align:center; font-size:12px; font-weight:700; color:#4a4034; flex-shrink:0; } /* nº da baia: identificador legível à prova de daltonismo */
+  .track { flex:1; position:relative; height:100%; margin-right:8px; background-image:linear-gradient(90deg,transparent 24.7%,rgba(0,0,0,.06) 25%,transparent 25.3%,transparent 49.7%,rgba(0,0,0,.06) 50%,transparent 50.3%,transparent 74.7%,rgba(0,0,0,.06) 75%,transparent 75.3%); }
+  .mud { position:absolute; top:8%; bottom:8%; width:18px; background:rgba(90,60,30,.28); border-radius:4px; }
+  .finish { position:absolute; right:0; top:3px; bottom:3px; width:5px; background:repeating-linear-gradient(45deg,#2c2c2a 0,#2c2c2a 4px,#fff 4px,#fff 8px); border-radius:2px; }
+  .cav { position:absolute; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:4px; will-change:left; white-space:nowrap; }
+  .cav .h { line-height:1; display:inline-block; animation:gallop .5s ease-in-out infinite; transform-origin:center; }
+  .pista.reta .cav .h { animation-duration:.28s; }
+  @keyframes gallop { 0%,100%{transform:scaleX(-1) translateY(0);} 50%{transform:scaleX(-1) translateY(-3px) rotate(-3deg);} }
+  .pista.reta .cav::after { content:""; position:absolute; right:100%; top:50%; width:22px; height:2px; background:linear-gradient(90deg,transparent,rgba(0,0,0,.18)); margin-right:2px; }
+  .cav .dot { border-radius:50%; flex-shrink:0; }
+  .cav .label { font-weight:600; }
+  .cav .tt2 { font-size:9px; color:#fff; border-radius:4px; padding:0 4px; }
+  /* "Pular para o resultado" — flutua durante a corrida; some com a tela (.screen) */
+  .skipbtn { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.28); opacity:.95; }
+  .skipbtn:hover { opacity:1; }
+  .badge { border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:600; color:#fff; background:#999; flex-shrink:0; }
+
+  /* ===== LARGADA (contagem) + PHOTO FINISH ===== */
+  #cd { display:none; position:fixed; inset:0; z-index:50; align-items:center; justify-content:center; pointer-events:none; }
+  #cd-num { font-size:130px; font-weight:700; line-height:1; text-shadow:0 3px 24px rgba(0,0,0,.18); }
+  @keyframes pop { 0%{transform:scale(.3);opacity:0;} 40%{transform:scale(1.18);opacity:1;} 100%{transform:scale(1);opacity:1;} }
+  #flash { display:none; position:fixed; inset:0; z-index:55; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  .photo-card { position:relative; background:#fff; border:1px solid #d9d6cc; border-radius:6px; padding:11px 11px 9px; box-shadow:0 18px 60px rgba(0,0,0,.5); transform:rotate(-1.1deg); animation:photoIn .42s cubic-bezier(.2,.9,.3,1.25); max-width:min(680px,94vw); width:100%; }
+  @keyframes photoIn { from{opacity:0; transform:rotate(-1.1deg) scale(.7);} to{opacity:1; transform:rotate(-1.1deg) scale(1);} }
+  .photo-card .photo-cap { font-size:13px; font-weight:700; letter-spacing:1.5px; color:var(--fire); text-align:center; margin-bottom:8px; }
+  .photo-card canvas { display:block; width:100%; height:auto; border-radius:3px; background:#ecd9bd; }
+  .photo-card .photo-sub { font-size:13px; color:var(--ts); text-align:center; margin-top:8px; font-style:italic; }
+  #shutterFlash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+  #shutterFlash.go { animation:shutterPop .5s ease forwards; }
+  @keyframes shutterPop { 0%{opacity:.95;} 100%{opacity:0;} }
+  /* ===== MODAL DO QR CODE ===== */
+  #qrModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  #qrModal.open { display:flex; }
+  #histModal, #listsModal { display:none; position:fixed; inset:0; z-index:58; background:rgba(20,18,14,.74); align-items:center; justify-content:center; padding:18px; }
+  #histModal.open, #listsModal.open { display:flex; }
+  .listsave { display:flex; gap:8px; margin-bottom:12px; flex-shrink:0; }
+  .listsave input { flex:1; min-width:0; height:38px; padding:0 12px; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--tp); font-size:14px; }
+  .hist-card { background:var(--bg); color:var(--tp); border:1px solid var(--border); border-radius:14px; padding:16px 18px; box-shadow:0 18px 60px rgba(0,0,0,.4); max-width:min(520px,94vw); width:100%; max-height:80vh; display:flex; flex-direction:column; animation:pop .3s ease; }
+  .hist-head { font-size:16px; font-weight:700; margin-bottom:6px; }
+  .hist-card #histBox { overflow-y:auto; }
+  .hist-foot { display:flex; justify-content:space-between; gap:8px; margin-top:12px; flex-shrink:0; }
+  .qr-card { background:#fff; border-radius:14px; padding:18px 20px 16px; box-shadow:0 18px 60px rgba(0,0,0,.5); text-align:center; max-width:min(420px,94vw); animation:pop .35s ease; }
+  .qr-card .qr-cap { font-size:15px; font-weight:600; color:var(--tp); margin-bottom:12px; }
+  .qr-card canvas { display:block; margin:0 auto; image-rendering:pixelated; border-radius:6px; max-width:100%; height:auto; }
+  .qr-card .qr-sub { font-size:12px; color:var(--ts); margin:12px 0 14px; line-height:1.5; }
+
+  /* ===== TELA DE BATERIA (torneio) ===== */
+  #screen-heat { text-align:center; }
+  #heatTitle { font-size:19px; font-weight:600; margin-bottom:14px; }
+  .bracket { text-align:left; max-width:560px; margin:14px auto; }
+  .bk-round { margin-bottom:14px; } .bk-round .rh { font-size:13px; font-weight:600; color:var(--fire); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .bk-heat { font-size:13px; color:var(--ts); padding:6px 11px; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:5px; } .bk-heat .win { color:var(--go-dark); font-weight:600; } .bk-heat em { color:var(--tt); }
+
+  /* ===== RESULTADO (pódio, stats, equipes) ===== */
+  #res { text-align:center; }
+  #reveal { padding:50px 0; } .reveal-trophy { font-size:64px; display:inline-block; animation:spin 1.2s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  .reveal-txt { font-size:24px; font-weight:600; margin:18px 0 14px; }
+  .reveal-dots { font-size:40px; letter-spacing:8px; color:var(--fire); animation:blink 1s steps(1) infinite; }
+  @keyframes blink { 0%{opacity:.2;} 50%{opacity:1;} 100%{opacity:.2;} }
+  #resContent { display:none; }
+  .prizeline { font-size:14px; color:var(--go-dark); margin-bottom:14px; }
+  .seqhead { font-weight:600; color:var(--ink); margin-bottom:6px; }
+  .pmopt { display:flex; align-items:flex-start; gap:8px; margin:6px 0; font-size:14px; cursor:pointer; line-height:1.35; }
+  .pmopt input { margin-top:3px; flex:none; }
+  .pmopt b { font-weight:600; }
+  .podio { display:flex; flex-direction:column; align-items:center; gap:14px; margin:18px 0; }
+  .vcard { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px 44px; display:inline-flex; flex-direction:column; align-items:center; gap:6px; }
+  .vcard.small { padding:16px 30px; } .vcard.small .ve { font-size:42px; } .vcard.small .vn { font-size:20px; }
+  .vcard .ve { font-size:56px; animation:bob .6s ease-in-out infinite alternate; }
+  @keyframes bob { from{transform:translateY(0) scaleX(-1);} to{transform:translateY(-8px) scaleX(-1);} }
+  .vcard .vn { font-size:26px; font-weight:600; } .vcard .vl { font-size:13px; color:var(--go); font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
+  .outros { display:flex; gap:12px; justify-content:center; align-items:flex-end; flex-wrap:wrap; }
+  .mini { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 16px; display:flex; align-items:center; gap:8px; font-size:14px; }
+  /* --- Resultado reformulado: vitória em destaque, prêmio no card, mini-pódio, compartilhar vs semente --- */
+  .vcard.win { border:2px solid var(--gold); padding-top:30px; background:linear-gradient(180deg, rgba(200,145,23,.12), var(--surface) 72%); box-shadow:0 6px 26px rgba(200,145,23,.22); }
+  .vcard .vmedal { font-size:30px; line-height:1; margin-bottom:-4px; }
+  .vcard .vteam { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--ts); margin-top:2px; }
+  .vcard .vteam i { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .vcard .vprize { margin-top:6px; font-size:15px; color:var(--go-dark); } .vcard .vprize b { color:var(--tp); }
+  .podstep { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 18px; display:flex; flex-direction:column; align-items:center; gap:2px; min-width:108px; }
+  .podstep .pmedal { font-size:20px; line-height:1; } .podstep .pe { font-size:32px; } .podstep .pn { font-size:15px; font-weight:600; }
+  .podstep .pprize { font-size:12px; color:var(--go-dark); margin-top:2px; max-width:140px; }
+  .sharebar { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; margin:18px 0 6px; }
+  .sharebar .sharelbl { font-size:13px; color:var(--ts); }
+  .seednote { font-size:12px; color:var(--tt); margin:2px 0 4px; }
+  .seednote .seed-copy { font-size:12px; padding:1px 7px; }
+  .acoes-sec { margin-top:8px; gap:8px; }
+  .acoes-sec .btn { color:var(--ts); }
+  .fulldet { max-width:380px; margin:12px auto; text-align:left; }
+  .fulldet > summary { cursor:pointer; font-size:13px; color:var(--ts); list-style:none; padding:9px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); text-align:center; transition:border-color .15s; }
+  .fulldet > summary::-webkit-details-marker { display:none; }
+  .fulldet > summary:hover, .fulldet > summary:focus-visible { border-color:var(--go); outline:none; }
+  .fulldet[open] > summary { border-radius:10px 10px 0 0; }
+  .fulllist { max-height:280px; overflow:auto; border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; padding:2px 14px; }
+  .tstand { max-width:480px; margin:16px auto; text-align:left; }
+  .tcrown { text-align:center; font-size:15px; font-weight:600; color:var(--go-dark); margin-bottom:10px; }
+  .tbar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .tbar .tn { width:130px; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .tbar .tn i { width:10px; height:10px; border-radius:3px; display:inline-block; flex-shrink:0; }
+  .tbar .tt { flex:1; height:18px; border-radius:6px; background:var(--surface); overflow:hidden; border:1px solid var(--border); } .tbar .tt span { display:block; height:100%; }
+  .tbar .ts2 { font-size:13px; color:var(--ts); width:64px; text-align:right; }
+  .stats { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:16px 0; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; min-width:120px; } .sv { font-size:18px; font-weight:600; } .sl { font-size:12px; color:var(--ts); margin-top:2px; }
+  .full { max-width:380px; margin:8px auto; text-align:left; max-height:300px; overflow:auto; }
+  .full .ft { font-size:12px; color:var(--ts); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
+  .full .row, .fulllist .row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; } .full .row:last-child, .fulllist .row:last-child { border-bottom:none; } .full .row .p, .fulllist .row .p { width:30px; font-weight:600; }
+  .seedline { font-size:13px; color:var(--ts); margin:14px 0; } .seedline code { background:var(--surface); padding:2px 8px; border-radius:6px; }
+  .seed-copy { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:var(--tp); background:var(--surface); border:1px solid var(--border); padding:2px 8px; border-radius:6px; cursor:pointer; transition:background .15s, border-color .15s; }
+  .seed-copy::after { content:" 📋"; font-size:11px; opacity:.65; }
+  .seed-copy:hover, .seed-copy:focus-visible { border-color:var(--go); background:var(--bg); color:var(--go-dark); outline:none; }
+  .linkprev { margin:-4px 0 14px; } .linkprev .lp-row { display:flex; gap:6px; align-items:center; max-width:520px; margin:0 auto; }
+  .lp-inp { flex:1; min-width:0; font-size:12px; font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--ts); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:7px 10px; }
+  .acoes { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
+  .savewrap { position:relative; display:inline-block; }
+  .savemenu { display:none; position:absolute; bottom:48px; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:0 8px 28px rgba(0,0,0,.14); z-index:30; flex-direction:column; gap:6px; min-width:220px; }
+  .savemenu.open { display:flex; }
+  .savemenu .savehead { font-size:12px; color:var(--ts); padding:2px 4px 6px; }
+  .savemenu .savehint { font-size:11px; color:var(--fire); padding:5px 4px 0; line-height:1.35; max-width:220px; }
+  .savemenu .btn { justify-content:flex-start; width:100%; }
+  /* ---- Acessibilidade: foco visível, leitor de tela e movimento reduzido ---- */
+  .btn:focus-visible, .mode-btn:focus-visible, .seed-copy:focus-visible, [data-action]:focus-visible { outline:2px solid var(--go); outline-offset:2px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  .qr-actions { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body>
+<!-- Menu de som (fixo, canto superior direito) -->
+<div id="topControls" style="position:fixed;top:12px;right:12px;z-index:60;display:flex;gap:8px;align-items:flex-start">
+  <button id="histBtn" class="btn btn-sm" style="background:var(--bg);display:none" data-action="abrirHist" title="Histórico de sorteios" aria-label="Histórico de sorteios">📜</button>
+  <button id="themeBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleTheme" title="Tema escuro" aria-label="Alternar tema">🌙</button>
+  <button id="fsBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleFullscreen" title="Tela cheia (apresentação)" aria-label="Tela cheia">⛶</button>
+  <div id="soundWrap" style="position:relative">
+    <button id="soundBtn" class="btn btn-sm" style="background:var(--bg)" data-action="toggleSoundMenu">🔊 Som ▾</button>
+    <div id="soundMenu" style="display:none;position:absolute;top:44px;right:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);flex-direction:column;gap:6px;min-width:200px">
+      <div style="font-size:12px;color:var(--ts);padding:2px 4px 4px">Sons</div>
+      <button class="btn btn-sm" id="optSfx" style="justify-content:flex-start;width:100%" data-action="toggleSfx">✓ 🔊 Ambiente</button>
+      <button class="btn btn-sm" id="optVoice" style="justify-content:flex-start;width:100%" data-action="toggleVoice">○ 🗣️ Narração</button>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 4px 2px;font-size:13px">🔈<input type="range" id="volSlider" min="0" max="100" value="100" aria-label="Volume" style="flex:1;cursor:pointer">🔊</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:2px 4px;font-size:12px;color:var(--ts)"><span>🗣️ Voz</span><select id="voiceSel" aria-label="Voz da narração" style="flex:1;min-width:0;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--tp)"></select></div>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <!-- ===================== TELA 1: CADASTRO ===================== -->
+  <div id="screen-cadastro" class="screen active">
+    <h2>🏇 Sorteio (Turfe)</h2>
+    <p class="sub">Cada participante vira um cavalo — a corrida decide o sorteio, ao vivo. 🏇</p>
+
+    <div class="modesel">
+      <button class="mode-btn active" data-mode="single" data-action="setMode">🏇 <span class="ml">Corrida única</span><span class="ms">Única</span></button>
+      <button class="mode-btn" data-mode="tournament" data-action="setMode">🏆 Torneio</button>
+      <button class="mode-btn" data-mode="teams" data-action="setMode">👥 <span class="ml">Por equipes</span><span class="ms">Equipes</span></button>
+    </div>
+    <div class="modehint" id="modeHint">Uma corrida única decide o ganhador.</div>
+    <div class="tournote" id="tourNote" style="display:none"></div>
+
+    <div class="input-row">
+      <input type="text" id="inp" placeholder="Nome do participante..." maxlength="40" autocomplete="off" aria-label="Nome do participante">
+      <select id="teamSel" style="display:none" aria-label="Equipe do participante"></select>
+      <button class="btn" data-action="addOne">Adicionar</button>
+    </div>
+    <div class="tools">
+      <button class="btn btn-sm" data-action="togglePanel" data-arg="bulk">📋 Colar lista</button>
+      <button class="btn btn-sm" id="listsBtn" data-action="abrirListas">📁 Listas</button>
+      <button class="btn btn-sm" id="btnClear" data-action="limparTudo">🗑️ Limpar tudo</button>
+    </div>
+
+    <div class="panel" id="teamsBox">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <input type="text" id="newTeam" placeholder="Nome da equipe / departamento" maxlength="24" style="min-width:160px" aria-label="Nome da equipe">
+        <button class="btn btn-sm btn-go" data-action="criarEquipe">Criar equipe</button>
+      </div>
+      <div id="teamChips" class="grid" style="margin-bottom:10px"></div>
+      <div class="hint">Crie as equipes e escolha a equipe de cada participante ao adicionar. Na lista colada, use "Nome, Equipe" em cada linha.</div>
+    </div>
+
+    <div class="panel" id="bulk">
+      <textarea id="ta" placeholder="Cole os nomes — um por linha&#10;&#10;Ana Souza&#10;Bruno Lima&#10;Carla Mendes" aria-label="Lista de nomes (um por linha)"></textarea>
+      <div class="hint" style="margin:6px 0 8px">Um nome por linha (também aceita .txt colado). No modo equipes use "Nome, Equipe". Duplicados são ignorados.</div>
+      <button class="btn btn-sm btn-go" data-action="addBulk">Adicionar lista</button>
+    </div>
+
+    <details id="advOpts">
+      <summary>🏆 Prêmios, semente e opções</summary>
+      <label class="fld">Nome do evento (opcional)</label>
+      <input type="text" id="eventInp" placeholder="Ex.: Sorteio da Festa Junina 2026" maxlength="60" style="width:100%" aria-label="Nome do evento">
+      <label class="fld" style="margin-top:14px">Prêmio em disputa (opcional)</label>
+      <input type="text" id="prizeInp" placeholder="Ex.: um fone de ouvido, um dia de folga..." maxlength="60" style="width:100%" aria-label="Prêmio do 1º lugar">
+      <div id="prizesExtra" style="display:none;margin-top:8px">
+        <input type="text" id="prizeInp2" placeholder="Prêmio do 2º lugar (opcional)" maxlength="60" style="width:100%;margin-bottom:8px" aria-label="Prêmio do 2º lugar">
+        <input type="text" id="prizeInp3" placeholder="Prêmio do 3º lugar (opcional)" maxlength="60" style="width:100%" aria-label="Prêmio do 3º lugar">
+        <div id="prizeModeWrap" style="margin-top:12px">
+          <div class="fld">Como entregar os prêmios?</div>
+          <label class="pmopt"><input type="radio" name="prizeMode" value="podium" checked data-action="setPrizeMode" aria-label="Numa corrida só: 1º, 2º e 3º levam os prêmios"><span>🏆 <b>Numa corrida só</b> — 1º, 2º e 3º lugares levam os prêmios</span></label>
+          <label class="pmopt"><input type="radio" name="prizeMode" value="sequential" data-action="setPrizeMode" aria-label="Uma corrida por prêmio: quem ganha sai e os demais disputam o próximo"><span>🔁 <b>Uma corrida por prêmio</b> — quem ganha sai; os demais disputam o próximo</span></label>
+          <div class="hint" style="margin-top:4px">⚖️ Uma só semente decide tudo — o link reproduz a sequência inteira.</div>
+        </div>
+      </div>
+      <button class="btn btn-sm" id="prizesToggle" data-action="togglePrizes" style="margin-top:6px">➕ Prêmios para 2º e 3º lugar</button>
+      <label class="fld" style="margin-top:14px">Semente (opcional)</label>
+      <input type="text" id="seedInp" placeholder="Deixe vazio para sorteio aleatório" maxlength="12" style="width:100%" aria-label="Semente do sorteio (opcional)">
+      <div class="hint" style="margin-top:6px">Use a mesma semente para reproduzir exatamente o mesmo sorteio. 💾 Seu cadastro fica salvo neste navegador.</div>
+      <label class="pmopt" style="margin-top:14px"><input type="checkbox" id="noRepeatChk" aria-label="Não sortear quem já ganhou"><span>🚫 <b>Não sortear quem já ganhou</b> — lembra os ganhadores entre sorteios (corrida única/equipes)<span id="noRepeatInfo" class="hint"></span></span></label>
+    </details>
+
+    <div class="grid" id="lista"></div>
+    <div class="bottom">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="count" id="count">0 participantes</span>
+        <button class="btn btn-go" id="btnStart" data-action="iniciar" disabled>Iniciar corrida</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TELA 2: CORRIDA ===================== -->
+  <div id="screen-corrida" class="screen">
+    <div class="race-head">
+      <div class="racelabel" id="racelabel"></div>
+      <h2 id="titulo">Corrida em andamento</h2>
+      <div class="raceprize" id="raceprize"></div>
+      <div class="narr" id="narr"></div>
+    </div>
+    <div class="scene"><div class="sun"></div><div class="stands"></div></div>
+    <div class="pista" id="pista"></div>
+    <button class="btn btn-go btn-sm skipbtn" id="btnSkip" data-action="pular" title="Pular para o resultado">⏭️ Pular</button>
+  </div>
+
+  <!-- ===================== TELA 3: BATERIA (torneio) ===================== -->
+  <div id="screen-heat" class="screen">
+    <h2 id="heatTitle"></h2>
+    <div id="heatWinner"></div>
+    <div id="heatBracket"></div>
+    <div class="acoes"><button class="btn btn-go" id="heatNext" data-action="continuarTorneio">Continuar</button></div>
+  </div>
+
+  <!-- ===================== TELA 4: RESULTADO ===================== -->
+  <div id="res" class="screen">
+    <div id="reveal">
+      <div class="reveal-trophy">🏆</div>
+      <div class="reveal-txt">E o grande vencedor é...</div>
+      <div class="reveal-dots">● ● ●</div>
+    </div>
+    <div id="resContent">
+      <h2 id="resTitle">🏆 Resultado do sorteio</h2>
+      <p class="sub" id="resSub"></p>
+      <div class="prizeline" id="prizeline"></div>
+      <div class="seedline" id="drawnLine"></div>
+      <div class="podio" id="podio"></div>
+      <div id="teamStandings"></div>
+      <div id="bracketBox"></div>
+      <div class="stats" id="stats"></div>
+      <div id="full"></div>
+      <div class="seedline" id="seedline"></div>
+      <div class="linkprev" id="linkPreview" style="display:none"></div>
+      <div class="acoes">
+        <button class="btn btn-go" id="btnNova" data-action="novamente">🎲 Nova corrida</button>
+        <button class="btn btn-go" id="btnProximo" data-action="proximo" style="display:none">🏅 Próximo ganhador</button>
+      </div>
+      <div class="acoes acoes-sec">
+        <button class="btn btn-sm" data-action="reprisar">↻ Reprisar</button>
+        <button class="btn btn-sm" data-action="editar">✏️ Editar participantes</button>
+        <div class="savewrap" id="saveWrap">
+          <button class="btn btn-sm" data-action="toggleSalvar">💾 Salvar ▾</button>
+          <div id="saveMenu" class="savemenu">
+            <div class="savehead">O que deseja salvar?</div>
+            <button class="btn btn-sm" data-action="imprimirRanking">📄 PDF do resultado</button>
+            <button class="btn btn-sm" data-action="certificado">🏆 Certificado (PDF)</button>
+            <button class="btn btn-sm" data-action="salvarImagem">🖼️ Imagem (PNG)</button>
+            <div class="savehint" id="pdfHint" style="display:none">⚠️ Sem o gerador de PDF (offline) — os PDFs serão salvos como imagem.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Overlays globais (contagem, photo finish, confete) -->
+<div id="cd"><div id="cd-num"></div></div>
+<div id="flash"><div class="photo-card"><div class="photo-cap">📸 PHOTO FINISH</div><canvas id="photoCanvas" width="640" height="300"></canvas><div class="photo-sub" id="photoSub">Chegada apertadíssima...</div></div><div id="shutterFlash"></div></div>
+<div id="qrModal" role="dialog" aria-modal="true" aria-label="QR Code do sorteio"><div class="qr-card"><div class="qr-cap">📱 Escaneie para abrir o sorteio</div><canvas id="qrCanvas" role="img" aria-label="QR Code do link do sorteio"></canvas><div class="qr-sub" id="qrSub"></div><div class="qr-actions"><button class="btn btn-sm" data-action="baixarQrPng">⬇️ PNG</button><button class="btn btn-sm" data-action="baixarQrSvg">⬇️ SVG</button><button class="btn btn-sm" data-action="fecharQR">Fechar</button></div></div></div>
+<div id="histModal" role="dialog" aria-modal="true" aria-label="Histórico de sorteios"><div class="hist-card"><div class="hist-head">📜 Histórico de sorteios</div><div id="histBox"></div><div class="hist-foot"><button class="btn btn-sm" data-action="limparHist">Limpar histórico</button><button class="btn btn-sm" data-action="fecharHist">Fechar</button></div></div></div>
+<div id="listsModal" role="dialog" aria-modal="true" aria-label="Listas salvas"><div class="hist-card"><div class="hist-head">📁 Listas salvas</div><div class="listsave"><input id="listName" type="text" maxlength="40" placeholder="Nome da lista (ex.: Turma A)" aria-label="Nome da lista"><button class="btn btn-sm btn-go" data-action="salvarLista">💾 Salvar atual</button></div><div id="listsBox"></div><div class="hist-foot"><div style="display:flex;gap:8px"><button class="btn btn-sm" data-action="exportarListas">⬆️ Exportar</button><button class="btn btn-sm" data-action="importarListas">⬇️ Importar</button></div><button class="btn btn-sm" data-action="fecharListas">Fechar</button></div><input type="file" id="listsFile" accept="application/json,.json" style="display:none"></div></div>
+<canvas id="confetti" aria-hidden="true" style="display:none;position:fixed;inset:0;pointer-events:none;z-index:9999"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.warn('[Export] jsPDF não carregou (CDN); exportações de PDF cairão para imagem (PNG).')"></script>
+
+<script>
+"use strict";
+/* ============================================================================
+   ARQUITETURA (arquivo único, modular por dentro)
+   ----------------------------------------------------------------------------
+   Tudo vive sob o namespace global `App`. Cada módulo tem responsabilidade
+   única e é um IIFE que devolve sua API pública. Para adicionar/remover/alterar
+   um recurso, mexa só no módulo correspondente:
+
+     Config      constantes e parâmetros ajustáveis (1 lugar p/ tunar tudo)
+     Log         logger com níveis (debug/info/warn/error) + timestamp + módulo
+     Util        helpers puros (esc, argmax, clamp, cor, ...)
+     Dom         atalhos de DOM (id, qs, on, setText...)
+     RNG         mulberry32 + shuffle (base do "sorteio justo")
+     State       estado central mutável (cadastro, corrida, torneio, runtime)
+     Timing      timers agendados (seq/clearSeq) com proteção try/catch
+     Bus         event bus mínimo (desacopla reações dos eventos da corrida)
+     Audio       Web Audio (sons sintetizados) + narração por voz
+     Sim         simulação DETERMINÍSTICA (pré-calcula frames/eventos/ordem)
+     Screens     troca de tela
+     Teams       equipes (criar/remover/cores/placar)
+     Roster      participantes (adicionar/remover/colar/validar)
+     Render      desenho da pista/cavalos/badges/ranks
+     Narration   falas + reação aos eventos da corrida (assina o Bus)
+     PhotoFinish foto da chegada (canvas) em chegadas apertadas
+     FX          confete/fogos da comemoração
+     Race        orquestra UMA corrida (largada->playback->fim->foto)
+     Tournament  baterias/chaveamento até a grande final
+     Result      tela de resultado (revelação, pódio, stats, exportar)
+     Export      PDF do resultado, certificado e imagem PNG
+     Modes       alterna o modo (single/tournament/teams)
+     UI          fiação: delegação de cliques (data-action), teclado, init
+
+   CONVENÇÕES:
+   - Botões NÃO usam onclick inline; usam data-action (e data-arg/data-idx).
+     O UI tem uma tabela ACTIONS que mapeia a ação -> função do módulo.
+   - DETERMINISMO: Sim.simulate só depende de (semente, nº de cavalos) e da
+     ordem das chamadas a rng(). Nunca use Math.random() dentro de Sim.
+   - Logs: verboso por padrão. Ajuste com Config.log.level ou ?log=info na URL.
+   ============================================================================ */
+const App = {};
+
+/* ===================== Config — parâmetros centrais ===================== */
+App.Config = {
+  APPNAME: 'Sorteio (Turfe)',
+  MAX: 100,                 // limite de participantes
+  MAXHEAT: 6,               // máx. de participantes por bateria (torneio)
+  histMax: 30,              // máx. de sorteios guardados no histórico (localStorage)
+  HORSES: ['🐎','🦄','🐴','🦓','🏇','🎠','🫏'], // "cavalos" ciclados por índice (cavalo/unicórnio/égua/zebra/jóquei/carrossel/burro); 🫏 é Unicode 15 (pode virar tofu em aparelho antigo)
+  PAL: ['#0072B2','#D55E00','#785EF0','#009E73','#CC79A7','#3A3A3A','#56B4E9','#9B1D5E','#E69F00','#117733'], // paleta segura p/ daltonismo (Okabe-Ito + extras); ordem intercala frio/quente p/ baias vizinhas distintas
+  TEAMPAL: ['#0072B2','#D55E00','#117733','#AA3377','#785EF0','#3A3A3A','#009E73','#8A5A00'], // equipes: tons escuros (texto branco) e distinguíveis em daltonismo
+  MODE_HINTS: {
+    single:'Uma corrida única decide o ganhador.',
+    tournament:'Os participantes são divididos em eliminatórias; os vencedores avançam até a grande final.',
+    teams:'Cada participante pertence a uma equipe. Além do vencedor individual, mostramos a equipe campeã por pontos.'
+  },
+  // Parâmetros da SIMULAÇÃO determinística (NÃO alterar sem revalidar a
+  // reprodutibilidade por semente — ver teste de regressão).
+  sim: {
+    FIM:96, STEP:33, maxSteps:4500,
+    vel0:.0016, vel0Rand:.0008,           // velocidade inicial: vel0 + rand*vel0Rand
+    velMin:.0012, velMax:.0042,           // limites da velocidade
+    velDrift:.0016, velDriftBias:.45,     // passeio aleatório da velocidade: (rng()-bias)*drift
+    tripProb:.0009, tripMin:380, tripRand:460,         // tropeço (só fora da reta)
+    burstProb:.004, burstProbReta:.012, burstMin:500, burstRand:800, // arrancada
+    mudProb:.5, mudMin:28, mudRand:44, mudHitProb:.4,  // poças de lama
+    stumbleSlow:.35, burstBoost:1.8, retaBoost:1.25, mudSlow:.6,      // multiplicadores
+    retaAt:.72, catchup:.000022, closeSteps:3,         // reta a 72%; "rubber band"; photo finish <=3 passos
+    splits:[25,50,75]                     // parciais narradas
+  },
+  // Tempos da corrida (ms)
+  timing: {
+    cd3:1600, cd2:2250, cd1:2900, go:3550, hideCd:4250, // largada (contagem)
+    galopeReta:150, galopeFlat:280, heartMs:640,         // ritmo do galope / batimento
+    narrMinGap:1700, narrLoopMin:2800, narrLoopRand:1800,// cadência da narração (1700 = tempo mín. na tela p/ dar tempo de ler)
+    endDelay:1500, photoHold:3000, revealDelay:2600, revealCelebStop:4200, heatStopDelay:1200
+  },
+  // Volume da torcida por fase (ganho do ruído de multidão)
+  crowd: { idle:.02, start:.045, reta:.06, end:.08, photo:.07, revealLow:.04, revealHigh:.1, zero:0 },
+  // Narração por voz (Web Speech API). rate/pitch ~1.0 = natural; >1 acelera/agudiza.
+  // Levemente animada, mas ainda fácil de entender (longe do 1.45 que confundia).
+  // A energia vem mais da VELOCIDADE (rate) que do TOM (pitch, mais sensível p/ clareza).
+  voice: { rate:1.1, pitch:1.08, ratePrio:1.2, pitchPrio:1.1, volume:.95 },
+  // Photo finish (canvas)
+  photo: {
+    W:640, H:300, depth:3, finishX:.72, leftX:.05, maxShow:4,
+    // limiar (em unidades de pista) -> palavra da margem de vitória
+    margins: [[0.18,'um focinho'],[0.5,'uma cabeça'],[1.1,'meio pescoço'],[2,'um pescoço'],[Infinity,'um corpo']]
+  },
+  // Logging
+  log: { level:'debug' }
+};
+const CFG = App.Config;
+
+/* ===================== Log — logger com níveis ===================== */
+/* Verboso por padrão. Cada mensagem traz timestamp, módulo e (opcional) dados.
+   Ajuste o nível com Config.log.level ou com ?log=info|warn|error|silent na URL.
+   Nunca lança exceção (logging jamais deve quebrar a aplicação).            */
+App.Log = (function(){
+  const LV = { debug:10, info:20, warn:30, error:40, silent:99 };
+  const css = { debug:'color:#9a9a93', info:'color:#1D9E75;font-weight:bold', warn:'color:#BA7517;font-weight:bold', error:'color:#E24B4A;font-weight:bold' };
+  let level = LV[CFG.log && CFG.log.level] || LV.debug;
+  try { const q = new URLSearchParams(location.search).get('log'); if (q && LV[q] != null) level = LV[q]; } catch (e) {}
+  function ts(){ const d = new Date(); return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0'); }
+  function emit(method, lvl, mod, msg, data){
+    if (LV[lvl] < level) return;
+    try {
+      const line = `%c${ts()} %c${mod}%c — ${msg}`;
+      const styles = ['color:#a3a299', css[lvl] || '', 'color:inherit'];
+      if (data !== undefined) console[method](line, ...styles, data);
+      else console[method](line, ...styles);
+    } catch (e) { /* silencioso de propósito */ }
+  }
+  return {
+    debug:(m,msg,d)=>emit('log','debug',m,msg,d),
+    info:(m,msg,d)=>emit('info','info',m,msg,d),
+    warn:(m,msg,d)=>emit('warn','warn',m,msg,d),
+    error:(m,msg,d)=>emit('error','error',m,msg,d),
+    setLevel:(l)=>{ if (LV[l] != null){ level = LV[l]; emit('info','info','Log','nível de log alterado',{level:l}); } },
+    levels: LV
+  };
+})();
+const Log = App.Log;
+
+/* ===================== Util — helpers puros ===================== */
+App.Util = (function(){
+  // Escapa entrada do usuário antes de interpolar em HTML (sempre usar!).
+  const esc = s => ('' + s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  // Índice do maior valor de um array.
+  const argmax = a => { let b = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[b]) b = i; return b; };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // Escolha aleatória NÃO determinística — usada só na estética (narração).
+  const rndPick = a => a[(Math.random() * a.length) | 0];
+  // Cor de um cavalo por índice (paleta fixa; gera HSL além do tamanho dela).
+  const corOf = i => i < CFG.PAL.length ? CFG.PAL[i] : `hsl(${(i*47)%360},60%,${i%2?40:30}%)`; // além da paleta: alterna claridade (ajuda em daltonismo)
+  // Emoji "cavalo" do participante i. O jóquei 🏇 (único com pessoa) varia o tom de pele,
+  // ciclando os 5 tons de forma determinística (mesma corrida = mesmos tons).
+  const SKIN = ['🏻','🏼','🏽','🏾','🏿'];
+  const horseEmoji = i => { const e = CFG.HORSES[i % CFG.HORSES.length]; return e === '🏇' ? e + SKIN[Math.floor(i / CFG.HORSES.length) % SKIN.length] : e; };
+  // base64url <-> bytes (URL-safe; sem '=').
+  const b64url = u8 => btoa(String.fromCharCode.apply(null, u8)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const unb64url = s => { const bin = atob(s.replace(/-/g,'+').replace(/_/g,'/')); const u = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u; };
+  // Compressão (deflate-raw) p/ encurtar a URL do link. Nativo (CompressionStream),
+  // assíncrono, SEM dependência. Esmaga a repetição (&n=/&t=) e os nomes.
+  const supportsCompression = () => typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined';
+  async function deflateB64url(str){ const cs = new CompressionStream('deflate-raw'); const buf = await new Response(new Blob([str]).stream().pipeThrough(cs)).arrayBuffer(); return b64url(new Uint8Array(buf)); }
+  async function inflateB64url(s){ const ds = new DecompressionStream('deflate-raw'); const buf = await new Response(new Blob([unb64url(s)]).stream().pipeThrough(ds)).arrayBuffer(); return new TextDecoder().decode(buf); }
+  return { esc, argmax, clamp, rndPick, corOf, horseEmoji, b64url, unb64url, supportsCompression, deflateB64url, inflateB64url };
+})();
+const U = App.Util;
+
+/* ===================== Dom — atalhos de DOM ===================== */
+App.Dom = (function(){
+  const id  = x => document.getElementById(x);
+  const qsa = (s, r=document) => Array.from(r.querySelectorAll(s));
+  const on  = (t, ev, fn, opts) => { if (t) t.addEventListener(ev, fn, opts); };
+  const setText = (x, t) => { const e = id(x); if (e) e.textContent = t; };
+  const setHTML = (x, h) => { const e = id(x); if (e) e.innerHTML = h; };
+  return { id, qsa, on, setText, setHTML };
+})();
+const D = App.Dom;
+
+/* ===================== RNG — gerador semeado (determinístico) ===================== */
+App.RNG = (function(){
+  // mulberry32: PRNG rápido e determinístico. Mesma semente => mesma sequência.
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  // Embaralhamento Fisher–Yates usando um rng fornecido (mantém determinismo).
+  function shuffle(arr, rng){ const a = arr.slice(); for (let i=a.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); const t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+  return { mulberry32, shuffle };
+})();
+
+/* ===================== State — estado central mutável ===================== */
+/* Um único objeto com todo o estado que cruza módulos. Agrupado por área.   */
+App.State = {
+  // --- Cadastro / dados de entrada ---
+  participantes: [],   // string[]  (nomes)
+  teamOf: {},          // nome -> equipe
+  teams: [],           // string[]  (equipes)
+  teamColors: {},      // equipe -> cor
+  prize: '',           // prêmio do 1º lugar (compat); ver `prizes`
+  prizes: [],          // prêmios por posição [1º, 2º, 3º]
+  eventName: '',       // nome do evento (opcional) — aparece no resultado/imagem/compartilhar/PDF
+  noRepeat: false,     // "não repetir ganhadores" — exclui quem já ganhou (lista persistida)
+  lastPool: null,      // pool efetivo do último sorteio (p/ "Reprisar" reproduzir com no-repeat)
+  mode: 'single',      // 'single' | 'tournament' | 'teams'
+  // --- Corrida atual ---
+  cavalos: [],         // [{nome, team, emoji, cor, idx}]
+  drawn: [],           // sorteio sequencial (livre): vencedores já retirados nesta rodada
+  editing: null,       // índice do participante em edição inline (ou null)
+  prizeMode: 'podium', // 'podium' (1 corrida, 1º/2º/3º) | 'sequential' (1 corrida por prêmio)
+  seq: null,           // sequência de prêmios reprodutível: {base,original,teamOf,prizes,idx,awarded}
+  sim: null,           // resultado de Sim.simulate (frames/eventos/ordem...)
+  lastSeed: null,      // última semente (para "Reprisar")
+  positions: [],       // posições do frame atual (render/narração leem daqui)
+  // --- Torneio ---
+  tour: null, tourMaster: null, tourBaseSeed: null,
+  // --- Animação / runtime ---
+  raf: null, celebRaf: null, gen: 0, userScrollAt: 0,   // gen invalida loops antigos ao reiniciar
+  narrTimer: null, seqTimers: [],
+  lastGalope: 0, lastNarr: 0, ended: false
+};
+const S = App.State;
+
+/* ===================== Store — persistência local do cadastro ===================== */
+/* Salva o cadastro (participantes, equipes, prêmio, semente, modo) no localStorage e o
+   restaura ao recarregar. AUTOMÁTICO: grava a cada mudança e restaura no boot — a menos
+   que a URL traga um sorteio compartilhado, que tem prioridade. Tudo fica só no navegador
+   (nada é enviado). Tolerante a localStorage ausente/bloqueado (degrada p/ no-op). */
+App.Store = (function(){
+  const KEY = 'sorteio-turfe:v1';
+  let armed = false; // só grava depois que o boot tentou restaurar (evita sobrescrever com vazio)
+
+  function ls(){ try { return (typeof localStorage !== 'undefined') ? localStorage : null; } catch (e) { return null; } }
+  function hasContent(d){ return !!d && (((d.participantes||[]).length) || ((d.teams||[]).length)); }
+  function snapshot(){
+    const pi = D.id('prizeInp'), si = D.id('seedInp');
+    return { v:1, participantes:S.participantes, teamOf:S.teamOf, teams:S.teams, teamColors:S.teamColors,
+             mode:S.mode, event: (D.id('eventInp')||{}).value || (S.eventName||''), prize: pi ? pi.value : (S.prize||''),
+             prize2: (D.id('prizeInp2')||{}).value || '', prize3: (D.id('prizeInp3')||{}).value || '',
+             prizeMode: App.Race.prizeModeValue(), seed: si ? si.value.trim() : '' };
+  }
+  function save(){
+    if (!armed) return; const store = ls(); if (!store) return;
+    try {
+      const snap = snapshot();
+      if (hasContent(snap)) { store.setItem(KEY, JSON.stringify(snap)); Log.debug('Store','salvo', { participantes:snap.participantes.length, equipes:snap.teams.length }); }
+      else { store.removeItem(KEY); } // sem nada relevante -> esquece
+    } catch (e) { Log.warn('Store','falha ao salvar', e); }
+  }
+  function read(){
+    const store = ls(); if (!store) return null;
+    try { const raw = store.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch (e) { Log.warn('Store','falha ao ler', e); return null; }
+  }
+  // Aplica um snapshot de cadastro ao estado + UI (reusado por restore() e por Listas salvas).
+  // Copia profundamente teamOf/teamColors p/ não aliasar o objeto guardado.
+  function applyData(d){
+    if (!hasContent(d)) return false;
+    S.participantes = Array.isArray(d.participantes) ? d.participantes.slice() : [];
+    S.teamOf = (d.teamOf && typeof d.teamOf === 'object') ? Object.assign({}, d.teamOf) : {};
+    S.teams = Array.isArray(d.teams) ? d.teams.slice() : [];
+    S.teamColors = (d.teamColors && typeof d.teamColors === 'object') ? Object.assign({}, d.teamColors) : {};
+    S.mode = (d.mode === 'tournament' || d.mode === 'teams') ? d.mode : 'single';
+    S.prizeMode = (d.prizeMode === 'sequential') ? 'sequential' : 'podium';
+    try {
+      App.Modes.set(S.mode);
+      const ei = D.id('eventInp'); if (ei) ei.value = (d.event || '').slice(0,60); S.eventName = (d.event || '').slice(0,60);
+      const pi = D.id('prizeInp'); if (pi) pi.value = (d.prize || '').slice(0,60);
+      const p2 = D.id('prizeInp2'); if (p2) p2.value = (d.prize2 || '').slice(0,60);
+      const p3 = D.id('prizeInp3'); if (p3) p3.value = (d.prize3 || '').slice(0,60);
+      if (d.prize2 || d.prize3) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
+      if (S.prizeMode === 'sequential') { try { const r = document.querySelector('input[name="prizeMode"][value="sequential"]'); if (r) r.checked = true; const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; } catch (e) {} }
+      if (d.event || d.prize || d.prize2 || d.prize3) { const a = D.id('advOpts'); if (a) a.open = true; }
+      const si = D.id('seedInp'); if (si) si.value = (d.seed && /^\d+$/.test(d.seed)) ? String(d.seed).slice(0,12) : '';
+      App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
+    } catch (e) { Log.warn('Store','aplicação de UI parcial', e); }
+    return true;
+  }
+  function restore(){
+    if (!applyData(read())) return false;
+    try { App.Roster.msg('↩️ Cadastro restaurado deste navegador — confira, ou 🗑️ limpe.', true); } catch (e) {}
+    Log.info('Store','cadastro restaurado', { participantes:S.participantes.length, equipes:S.teams.length, modo:S.mode });
+    return true;
+  }
+  function clear(){ const store = ls(); if (store) { try { store.removeItem(KEY); } catch (e) {} } }
+  function arm(){ armed = true; }
+  // --- Preferências de UI (tema, som, volume) — chave separada, sempre persistidas ---
+  const PKEY = 'sorteio-turfe:prefs:v1';
+  function prefs(){ const store = ls(); if (!store) return {}; try { const r = store.getItem(PKEY); return r ? JSON.parse(r) : {}; } catch (e) { return {}; } }
+  function pref(key, value){
+    if (arguments.length < 2) return prefs()[key];
+    const store = ls(); if (!store) return value;
+    try { const p = prefs(); p[key] = value; store.setItem(PKEY, JSON.stringify(p)); } catch (e) { Log.warn('Store','falha ao salvar pref', e); }
+    return value;
+  }
+  // --- Histórico de sorteios (chave própria) ---
+  const HKEY = 'sorteio-turfe:hist:v1';
+  function histLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(HKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function histSave(arr){ const store = ls(); if (!store) return; try { store.setItem(HKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar histórico', e); } }
+  // --- Listas salvas / presets (chave própria) ---
+  const LKEY = 'sorteio-turfe:lists:v1';
+  function listsLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(LKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function listsSave(arr){ const store = ls(); if (!store) return; try { store.setItem(LKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar listas', e); } }
+  // --- Ganhadores anteriores ("não repetir") — chave própria ---
+  const WKEY = 'sorteio-turfe:winners:v1';
+  function winnersLoad(){ const store = ls(); if (!store) return []; try { const r = store.getItem(WKEY); const a = r ? JSON.parse(r) : []; return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function winnersSave(arr){ const store = ls(); if (!store) return; try { store.setItem(WKEY, JSON.stringify(arr)); } catch (e) { Log.warn('Store','falha ao salvar ganhadores', e); } }
+  return { save, restore, clear, arm, snapshot, apply: applyData, prefs, pref, histLoad, histSave, listsLoad, listsSave, winnersLoad, winnersSave };
+})();
+
+/* ===================== History — histórico de sorteios ===================== */
+/* Cada sorteio concluído (revelação) vira uma entrada salva no localStorage (via App.Store),
+   com vencedor + semente + cadastro — para reabrir e reproduzir exatamente. */
+App.History = (function(){
+  const MICON = { single:'🏇', tournament:'🏆', teams:'👥' };
+  function list(){ return App.Store.histLoad(); }
+  function fmtDate(ts){ try { const d = new Date(ts); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); } catch (e) { return ''; } }
+  // Registra o sorteio recém-revelado. Evita duplicar reprises (mesma semente/modo/n no topo).
+  function record(){
+    try {
+      if (!S.sim || !S.cavalos.length) return;
+      const v = S.cavalos[S.sim.order[0]];
+      const entry = { ts: Date.now(), mode: S.mode, winner: v.nome, seed: (S.lastSeed >>> 0),
+                      prize: S.prize || '', names: S.participantes.slice(),
+                      teamOf: (S.mode === 'teams') ? Object.assign({}, S.teamOf) : null, n: S.participantes.length };
+      let arr = list();
+      if (arr[0] && arr[0].seed === entry.seed && arr[0].mode === entry.mode && arr[0].n === entry.n) { render(); return; }
+      arr.unshift(entry); arr = arr.slice(0, CFG.histMax); App.Store.histSave(arr);
+      Log.info('History','sorteio registrado', { vencedor:v.nome, seed:entry.seed, total:arr.length });
+      render();
+    } catch (e) { Log.warn('History','falha ao registrar', e); }
+  }
+  let lastFocus = null;
+  // Modal do histórico (no canto): abre/fecha com foco gerenciado (teclado).
+  function open(){
+    render(); lastFocus = document.activeElement;
+    const m = D.id('histModal'); if (!m) return; m.classList.add('open');
+    const fb = m.querySelector('[data-action="reabrirHist"], [data-action="fecharHist"]'); if (fb) fb.focus();
+  }
+  function close(){ const m = D.id('histModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
+  function clear(){ App.Store.histSave([]); render(); close(); App.Roster.msg('Histórico limpo.', true); }
+  function remove(i){ const a = list(); if (i < 0 || i >= a.length) return; a.splice(i, 1); App.Store.histSave(a); render(); if (!a.length) close(); }
+  // Reabre um sorteio no cadastro (clicar Iniciar reproduz exatamente — mesma semente).
+  function reopen(i){
+    const e = list()[i]; if (!e) return;
+    close();
+    S.participantes = (e.names || []).slice();
+    S.teamOf = (e.teamOf && typeof e.teamOf === 'object') ? Object.assign({}, e.teamOf) : {};
+    S.teams = [...new Set(Object.values(S.teamOf))]; S.teamColors = {};
+    S.mode = (e.mode === 'tournament' || e.mode === 'teams') ? e.mode : 'single';
+    try {
+      App.Modes.set(S.mode); S.teams.forEach(t => App.Teams.color(t));
+      const pi = D.id('prizeInp'); if (pi) pi.value = e.prize || ''; if (e.prize) { const a = D.id('advOpts'); if (a) a.open = true; }
+      const si = D.id('seedInp'); if (si && e.seed != null) { si.value = String(e.seed >>> 0); const a = D.id('advOpts'); if (a) a.open = true; }
+      App.Teams.renderChips(); App.Teams.buildSelect(); App.Roster.render();
+      App.Screens.show('screen-cadastro');
+      App.Roster.msg('↩️ Sorteio reaberto — confira e clique em Iniciar ✓', true);
+    } catch (err) { Log.warn('History','UI da reabertura parcial', err); }
+    Log.info('History','sorteio reaberto', { vencedor:e.winner, seed:e.seed });
+  }
+  function render(){
+    const a = list();
+    const btn = D.id('histBtn'); if (btn) { btn.style.display = a.length ? '' : 'none'; btn.title = 'Histórico de sorteios (' + a.length + ')'; } // só aparece com histórico
+    const box = D.id('histBox'); if (!box) return;
+    if (!a.length) { box.innerHTML = '<div class="empty">Nenhum sorteio ainda.</div>'; return; }
+    box.innerHTML = a.map((e, i) => `<div class="histrow"><div class="histinfo"><b>${MICON[e.mode] || '🏇'} ${U.esc(e.winner)}</b><span class="hint">${e.n} part. · semente ${e.seed} · ${fmtDate(e.ts)}</span></div><div class="histacts"><button class="btn btn-sm" data-action="reabrirHist" data-idx="${i}">↩️ Reabrir</button><button class="btn btn-sm" data-action="removerHist" data-idx="${i}" aria-label="Remover do histórico">🗑️</button></div></div>`).join('');
+  }
+  return { record, list, clear, remove, reopen, open, close, render };
+})();
+
+/* ===================== Lists — listas salvas (presets de cadastro) ===================== */
+/* Salva o cadastro atual com um nome (localStorage, chave própria via App.Store) e permite
+   carregar/remover depois — ótimo p/ quem repete sorteios (turmas, times, sócios). */
+App.Lists = (function(){
+  const MICON = { single:'🏇', tournament:'🏆', teams:'👥' };
+  let lastFocus = null;
+  function all(){ return App.Store.listsLoad(); }
+  function fmtDate(ts){ try { const d = new Date(ts); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); } catch (e) { return ''; } }
+  function saveCurrent(){
+    const inp = D.id('listName'); const name = (inp ? inp.value : '').trim().slice(0, 40);
+    if (!name) { App.Roster.msg('Dê um nome para a lista.', false); if (inp) inp.focus(); return; }
+    const snap = App.Store.snapshot();
+    if (!(snap.participantes && snap.participantes.length)) { App.Roster.msg('Adicione participantes antes de salvar.', false); return; }
+    const entry = { name, ts: Date.now(), data: JSON.parse(JSON.stringify(snap)) }; // cópia independente
+    let arr = all();
+    const idx = arr.findIndex(x => (x.name || '').toLowerCase() === name.toLowerCase());
+    if (idx >= 0) arr[idx] = entry; else arr.unshift(entry);
+    arr = arr.slice(0, 30); App.Store.listsSave(arr);
+    if (inp) inp.value = '';
+    Log.info('Lists','lista salva', { nome:name, total:arr.length });
+    render(); App.Roster.msg(idx >= 0 ? `Lista "${name}" atualizada.` : `Lista "${name}" salva.`, true);
+  }
+  function load(i){
+    const e = all()[i]; if (!e) return;
+    close(); App.Store.apply(e.data); App.Screens.show('screen-cadastro');
+    Log.info('Lists','lista carregada', { nome:e.name });
+    App.Roster.msg(`Lista "${e.name}" carregada — confira e clique em Iniciar ✓`, true);
+  }
+  function remove(i){ const a = all(); if (i < 0 || i >= a.length) return; const n = a[i].name; a.splice(i, 1); App.Store.listsSave(a); render(); App.Roster.msg(`Lista "${n}" removida.`, true); }
+  function render(){
+    const a = all();
+    const btn = D.id('listsBtn'); if (btn) btn.title = 'Listas salvas (' + a.length + ')';
+    const box = D.id('listsBox'); if (!box) return;
+    box.innerHTML = a.length ? a.map((e, i) => {
+      const d = e.data || {}, n = (d.participantes || []).length, tms = (d.teams || []).length;
+      const meta = `${MICON[d.mode] || '🏇'} ${n} part.${tms ? ' · ' + tms + ' equipes' : ''} · ${fmtDate(e.ts)}`;
+      return `<div class="histrow"><div class="histinfo"><b>${U.esc(e.name)}</b><span class="hint">${meta}</span></div><div class="histacts"><button class="btn btn-sm btn-go" data-action="carregarLista" data-idx="${i}">Carregar</button><button class="btn btn-sm" data-action="removerLista" data-idx="${i}" aria-label="Remover lista" title="Remover">🗑️</button></div></div>`;
+    }).join('') : '<div class="empty">Nenhuma lista salva ainda. Dê um nome acima e salve o cadastro atual.</div>';
+  }
+  function open(){ render(); lastFocus = document.activeElement; const m = D.id('listsModal'); if (!m) return; m.classList.add('open'); const inp = D.id('listName'); if (inp) inp.focus(); }
+  function close(){ const m = D.id('listsModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
+  // Exporta todas as listas salvas como .json (backup / levar p/ outro dispositivo).
+  function exportFile(){
+    const data = all(); if (!data.length) { App.Roster.msg('Nenhuma lista salva para exportar.', false); return; }
+    try {
+      const blob = new Blob([JSON.stringify({ v:1, kind:'sorteio-listas', lists:data }, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href=url; a.download='sorteio-listas.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+      Log.info('Lists','listas exportadas', { total:data.length }); App.Roster.msg(`${data.length} lista(s) exportada(s).`, true);
+    } catch (e) { Log.error('Lists','falha ao exportar', e); App.Roster.msg('Não foi possível exportar.', false); }
+  }
+  // Importa listas de um .json (mescla por nome; importada substitui a de mesmo nome).
+  function importFile(file){
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const incoming = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.lists) ? parsed.lists : null);
+        const valid = (incoming || []).filter(e => e && typeof e.name === 'string' && e.data && Array.isArray(e.data.participantes));
+        if (!valid.length) { App.Roster.msg('Nenhuma lista válida no arquivo.', false); return; }
+        let arr = all(), add = 0, upd = 0;
+        valid.forEach(e => {
+          const entry = { name: e.name.slice(0,40), ts: e.ts || Date.now(), data: e.data };
+          const idx = arr.findIndex(x => (x.name||'').toLowerCase() === entry.name.toLowerCase());
+          if (idx >= 0) { arr[idx] = entry; upd++; } else { arr.unshift(entry); add++; }
+        });
+        arr = arr.slice(0, 30); App.Store.listsSave(arr); render();
+        Log.info('Lists','listas importadas', { add, upd });
+        App.Roster.msg(`Importado: ${add} nova(s)${upd ? ', ' + upd + ' atualizada(s)' : ''}.`, true);
+      } catch (e) { Log.error('Lists','falha ao importar', e); App.Roster.msg('Não consegui ler o arquivo (JSON inválido).', false); }
+    };
+    reader.readAsText(file);
+  }
+  return { saveCurrent, load, remove, render, open, close, exportFile, importFile };
+})();
+
+/* ===================== View — tema (claro/escuro) + tela cheia ===================== */
+/* Chrome visual: alterna tema (persistido em App.Store.pref) e tela cheia (apresentação).
+   O tema inicial respeita a preferência salva ou, na 1ª visita, o prefers-color-scheme. */
+App.View = (function(){
+  function applyTheme(t){
+    const dark = t === 'dark';
+    try { document.body.classList.toggle('dark', dark); } catch (e) {}
+    const b = D.id('themeBtn'); if (b) { b.textContent = dark ? '☀️' : '🌙'; b.title = dark ? 'Tema claro' : 'Tema escuro'; }
+  }
+  function setTheme(t){ applyTheme(t); App.Store.pref('theme', t); Log.info('View','tema ' + t); }
+  function toggleTheme(){ setTheme(document.body.classList.contains('dark') ? 'light' : 'dark'); }
+  function initTheme(){
+    let t = App.Store.pref('theme');
+    if (t !== 'dark' && t !== 'light') t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    applyTheme(t);
+  }
+  function fsEl(){ return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function toggleFullscreen(){
+    try {
+      const r = !fsEl()
+        ? (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement)
+        : (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      if (r && r.catch) r.catch(e => Log.warn('View','tela cheia negada', e)); // promise pode rejeitar
+    } catch (e) { Log.warn('View','tela cheia indisponível', e); }
+  }
+  function syncFs(){ const on = !!fsEl(); document.body.classList.toggle('presenting', on); const b = D.id('fsBtn'); if (b) { b.textContent = on ? '🗗' : '⛶'; b.title = on ? 'Sair da tela cheia' : 'Tela cheia (apresentação)'; } }
+  // Movimento reduzido: respeita o prefers-reduced-motion do sistema (corrida vai direto ao resultado).
+  function reducedMotion(){ try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
+  // Anúncio para leitores de tela via região aria-live (#srLive). Limpa antes p/ forçar releitura.
+  function announce(t){ const el = D.id('srLive'); if (!el) return; el.textContent = ''; setTimeout(() => { el.textContent = t; }, 30); Log.debug('View','announce', { t }); }
+  function init(){
+    initTheme();
+    try { document.addEventListener('fullscreenchange', syncFs); document.addEventListener('webkitfullscreenchange', syncFs); } catch (e) {}
+    syncFs();
+  }
+  return { setTheme, toggleTheme, initTheme, toggleFullscreen, reducedMotion, announce, init };
+})();
+
+/* ===================== Timing — timers agendados ===================== */
+/* seq(ms, fn): agenda e registra o timer (para poder cancelar tudo em massa).
+   clearSeq(): cancela todos os timers agendados (usado ao reiniciar/limpar). */
+App.Timing = (function(){
+  function seq(ms, fn){
+    const t = setTimeout(() => { try { fn(); } catch (e) { Log.error('Timing', 'erro em callback agendado', e); } }, ms);
+    S.seqTimers.push(t); return t;
+  }
+  function clearSeq(){ S.seqTimers.forEach(clearTimeout); S.seqTimers = []; }
+  return { seq, clearSeq };
+})();
+
+/* ===================== Bus — event bus mínimo ===================== */
+/* Desacopla quem EMITE um evento de quem REAGE a ele. Ex.: a corrida emite
+   'race:event' e a Narração reage. Para somar uma nova reação, basta um on(). */
+App.Bus = (function(){
+  const map = {};   // tipo -> [handlers]
+  function on(type, fn){ (map[type] || (map[type] = [])).push(fn); return () => off(type, fn); }
+  function off(type, fn){ const a = map[type]; if (a){ const i = a.indexOf(fn); if (i>=0) a.splice(i,1); } }
+  function emit(type, payload){
+    const a = map[type]; if (!a) return;
+    for (const fn of a) { try { fn(payload); } catch (e) { Log.error('Bus', 'erro em handler de ' + type, e); } }
+  }
+  return { on, off, emit };
+})();
+
+/* ===================== Audio — sons sintetizados + voz ===================== */
+/* Todo som é gerado via Web Audio API (sem arquivos). O contexto só inicia
+   após interação do usuário (políticas de autoplay). Estado de áudio fica
+   encapsulado aqui (ctx, master, mudo, voz, torcida, batimento).            */
+App.Audio = (function(){
+  let ctx = null, master = null, muted = false, voiceOn = false, volume = 1, crowd = null, crowdGain = null, heartTimer = null, chosenVoiceURI = null;
+
+  // Garante o AudioContext + nó master. Retorna o ctx (ou null se indisponível).
+  function ensure(){
+    if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); Log.info('Audio','AudioContext criado'); } catch (e) { Log.warn('Audio','AudioContext indisponível', e); return null; } }
+    if (!master) { master = ctx.createGain(); master.gain.value = muted ? 0 : volume; master.connect(ctx.destination); }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // Reflete o estado (mudo/voz) nos botões do menu de som.
+  function applyState(){
+    if (master) master.gain.value = muted ? 0 : volume;
+    const a = D.id('optSfx'), v = D.id('optVoice'), b = D.id('soundBtn'), sl = D.id('volSlider');
+    if (a) a.textContent = (muted ? '○' : '✓') + ' 🔊 Ambiente';
+    if (v) v.textContent = (voiceOn ? '✓' : '○') + ' 🗣️ Narração';
+    if (b) b.textContent = ((!muted || voiceOn) ? '🔊' : '🔇') + ' Som ▾';
+    if (sl && document.activeElement !== sl) sl.value = Math.round(volume * 100);
+  }
+  function toggleSfx(){ muted = !muted; if (!muted && volume === 0) volume = .6; persist(); Log.info('Audio','ambiente '+(muted?'OFF':'ON')); applyState(); }
+  function toggleVoice(){ voiceOn = !voiceOn; if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel(); persist(); Log.info('Audio','narração '+(voiceOn?'ON':'OFF')); applyState(); }
+  function setVolume(v){ volume = Math.max(0, Math.min(1, +v || 0)); muted = (volume === 0); persist(); applyState(); }
+  function persist(){ try { App.Store.pref('vol', volume); App.Store.pref('muted', muted); App.Store.pref('voice', voiceOn); } catch (e) {} }
+  function loadPrefs(){ try { const pv = App.Store.pref('vol'); if (typeof pv === 'number') volume = Math.max(0, Math.min(1, pv)); const pm = App.Store.pref('muted'); if (typeof pm === 'boolean') muted = pm; const po = App.Store.pref('voice'); if (typeof po === 'boolean') voiceOn = po; const pu = App.Store.pref('voiceURI'); if (typeof pu === 'string') chosenVoiceURI = pu; } catch (e) {} populateVoices(); applyState(); }
+  function toggleMenu(e){ if (e) e.stopPropagation(); const m = D.id('soundMenu'); const open = m.style.display !== 'flex'; m.style.display = open ? 'flex' : 'none'; if (open) populateVoices(); }
+  function closeMenu(){ const m = D.id('soundMenu'); if (m) m.style.display = 'none'; }
+
+  // ---- Primitivas de síntese ----
+  function beep(f, d, t='sine', v=.14){ const c=ensure(); if(!c)return; const o=c.createOscillator(),g=c.createGain(); o.type=t; o.frequency.value=f; g.gain.setValueAtTime(v,c.currentTime); g.gain.exponentialRampToValueAtTime(.001,c.currentTime+d); o.connect(g); g.connect(master); o.start(); o.stop(c.currentTime+d); }
+  function note(f, t, d, ty='sawtooth', v=.12){ const c=ensure(); if(!c)return; const o=c.createOscillator(),g=c.createGain(); o.type=ty; o.frequency.value=f; const T=c.currentTime+t; g.gain.setValueAtTime(0,T); g.gain.linearRampToValueAtTime(v,T+.02); g.gain.setValueAtTime(v,T+Math.max(.05,d-.05)); g.gain.exponentialRampToValueAtTime(.001,T+d); o.connect(g); g.connect(master); o.start(T); o.stop(T+d+.03); }
+  function noise(d, v, f=1000, down){ const c=ensure(); if(!c)return; const n=Math.floor(c.sampleRate*d); const buf=c.createBuffer(1,n,c.sampleRate); const dt=buf.getChannelData(0); for(let i=0;i<n;i++) dt[i]=Math.random()*2-1; const src=c.createBufferSource(); src.buffer=buf; const fl=c.createBiquadFilter(); fl.type='bandpass'; fl.frequency.value=f; fl.Q.value=.7; if(down) fl.frequency.linearRampToValueAtTime(f*.4,c.currentTime+d); const g=c.createGain(); g.gain.setValueAtTime(.0001,c.currentTime); g.gain.linearRampToValueAtTime(v,c.currentTime+d*.3); g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d); src.connect(fl); fl.connect(g); g.connect(master); src.start(); src.stop(c.currentTime+d); }
+
+  // ---- Sons nomeados (reusam as primitivas acima) ----
+  function bugle(){ [[392,0,.18],[523,.18,.18],[659,.36,.2],[784,.56,.34],[659,.92,.18],[784,1.1,.55]].forEach(a=>note(a[0],a[1],a[2],'sawtooth',.12)); }
+  function gun(){ noise(.22,.28,1600); beep(90,.28,'sine',.22); }
+  function bell(){ const c=ensure(); if(!c)return; [880,1320,1760,2640].forEach((f,i)=>{ const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.value=f; const v=[.13,.07,.04,.02][i]; g.gain.setValueAtTime(v,c.currentTime); g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+1.5); o.connect(g); g.connect(master); o.start(); o.stop(c.currentTime+1.6); }); }
+  function galope(fast){ const p=fast?210:170; beep(p,.05,'sawtooth',.06); setTimeout(()=>beep(p-40,.05,'sawtooth',.045),fast?45:70); }
+  function applause(d=3){ for(let k=0;k<3;k++) setTimeout(()=>noise(d*.9,.06,2200+k*420),k*120); }
+  function winnerFanfare(){ [[523,0,.16],[659,.16,.16],[784,.32,.16],[1047,.48,.5],[784,.98,.16],[1047,1.14,.6]].forEach(a=>note(a[0],a[1],a[2],'sawtooth',.13)); }
+  function drumroll(d=2.4){ const c=ensure(); if(!c)return; const n=Math.floor(d/.045); for(let i=0;i<n;i++){ const t=i*.045,v=.04+.07*(i/n); const o=c.createOscillator(),g=c.createGain(); o.type='triangle'; o.frequency.value=i%2?150:120; const T=c.currentTime+t; g.gain.setValueAtTime(v,T); g.gain.exponentialRampToValueAtTime(.001,T+.04); o.connect(g); g.connect(master); o.start(T); o.stop(T+.05); } }
+  function cymbal(){ noise(1.3,.12,4500); }
+  function shutter(){ beep(2200,.02,'square',.1); setTimeout(()=>beep(1600,.02,'square',.08),55); noise(.12,.06,3000); }
+  function heartbeat(){ beep(60,.12,'sine',.16); setTimeout(()=>beep(54,.1,'sine',.12),160); }
+  function reactOhh(){ noise(.6,.06,700,true); }
+  function reactCheer(){ noise(.5,.06,2000); }
+  function pop(){ beep(700+Math.random()*500,.08,'sine',.06); noise(.1,.04,2500); }
+  function click(){ beep(900,.04,'square',.05); }
+
+  // Narração por voz (Web Speech API). prio=true interrompe a fala atual.
+  function say(t, prio){
+    if (!voiceOn || !('speechSynthesis' in window)) return;
+    try {
+      if (prio) speechSynthesis.cancel();
+      else if (speechSynthesis.speaking || speechSynthesis.pending) return;
+      const V = CFG.voice;
+      const u = new SpeechSynthesisUtterance(t); u.lang='pt-BR'; u.rate = prio?V.ratePrio:V.rate; u.pitch = prio?V.pitchPrio:V.pitch; u.volume = V.volume;
+      const v = pickVoice(); if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    } catch (e) { Log.warn('Audio','falha na narração por voz', e); }
+  }
+  // Voz da narração: usa a escolhida pelo usuário (se houver), senão a melhor pt-BR/pt automática.
+  function pickVoice(){
+    let vs = []; try { vs = speechSynthesis.getVoices(); } catch (e) { return null; }
+    if (chosenVoiceURI) { const c = vs.find(x => x.voiceURI === chosenVoiceURI); if (c) return c; }
+    return vs.find(x => /pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name) && x.localService)
+        || vs.find(x => /pt[-_]?BR|Brazil|Brasil/i.test(x.lang+' '+x.name))
+        || vs.find(x => /^pt/i.test(x.lang) && x.localService)
+        || vs.find(x => /^pt/i.test(x.lang)) || null;
+  }
+  function populateVoices(){
+    const sel = D.id('voiceSel'); if (!sel) return;
+    let vs = []; try { vs = speechSynthesis.getVoices(); } catch (e) {}
+    const pt = vs.filter(x => /^pt/i.test(x.lang)), list = pt.length ? pt : vs;
+    if (!list.length) { sel.innerHTML = '<option value="">(voz padrão do sistema)</option>'; return; }
+    const auto = pickVoice();
+    sel.innerHTML = `<option value="">Automática${auto ? ' — ' + U.esc(auto.name) : ''}</option>` +
+      list.map(x => `<option value="${U.esc(x.voiceURI)}"${x.voiceURI === chosenVoiceURI ? ' selected' : ''}>${U.esc(x.name)} (${U.esc(x.lang)})</option>`).join('');
+  }
+  function setVoice(uri){
+    chosenVoiceURI = uri || null; try { App.Store.pref('voiceURI', chosenVoiceURI); } catch (e) {}
+    populateVoices(); Log.info('Audio','voz escolhida', { uri:chosenVoiceURI });
+    if (voiceOn) { try { speechSynthesis.cancel(); } catch (e) {} say('Voz da narração selecionada.', true); }
+  }
+
+  // Ruído de torcida em loop, com ganho ajustável por fase.
+  function crowdStart(){ const c=ensure(); if(!c||crowd)return; const n=Math.floor(c.sampleRate*2); const buf=c.createBuffer(1,n,c.sampleRate); const d=buf.getChannelData(0); let last=0; for(let i=0;i<n;i++){ const w=Math.random()*2-1; last=(last+.02*w)/1.02; d[i]=last*3.2; } crowd=c.createBufferSource(); crowd.buffer=buf; crowd.loop=true; const f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=650; f.Q.value=.5; crowdGain=c.createGain(); crowdGain.gain.value=.02; crowd.connect(f); f.connect(crowdGain); crowdGain.connect(master); crowd.start(); }
+  function crowdSet(v){ if (crowdGain && ctx) crowdGain.gain.setTargetAtTime(v, ctx.currentTime, .3); }
+  function crowdStop(){ if (crowd){ try { crowd.stop(); } catch (e) {} crowd=null; crowdGain=null; } }
+  function startHeart(){ stopHeart(); heartTimer = setInterval(heartbeat, CFG.timing.heartMs); }
+  function stopHeart(){ if (heartTimer){ clearInterval(heartTimer); heartTimer=null; } }
+
+  return {
+    ensure, applyState, toggleSfx, toggleVoice, setVolume, setVoice, populateVoices, loadPrefs, toggleMenu, closeMenu,
+    bugle, gun, bell, galope, applause, winnerFanfare, drumroll, cymbal, shutter, heartbeat,
+    reactOhh, reactCheer, pop, click, say, beep,
+    crowdStart, crowdSet, crowdStop, startHeart, stopHeart
+  };
+})();
+
+/* ===================== Sim — simulação determinística ===================== */
+/* PRÉ-CALCULA toda a corrida (frames, eventos e ordem de chegada) ANTES da
+   animação. Depende SÓ de (semente, n). A ordem das chamadas a rng() é o
+   contrato de reprodutibilidade — não reordene nem insira chamadas novas.
+   Retorna: {frames, events, order, totalSteps, STEP, FIM, close, leadChanges,
+             gain, surges, mud, seed}.                                        */
+App.Sim = (function(){
+  const C = CFG.sim;
+  function simulate(seed, n){
+    const t0 = (performance && performance.now) ? performance.now() : 0;
+    const rng = App.RNG.mulberry32(seed >>> 0);
+    const FIM = C.FIM, STEP = C.STEP, maxSteps = C.maxSteps;
+    // Estado por cavalo (1 chamada rng() por cavalo, para a velocidade inicial).
+    const h = Array.from({ length:n }, () => ({ pos:0, vel:C.vel0 + rng()*C.vel0Rand, burst:0, stumble:0, finished:false, fs:-1, muddone:false }));
+    // Poças de lama: 0 (n<4), senão 1 ou 2 (1 chamada rng() p/ contagem + 1 por poça).
+    const mud = []; const mc = n >= 4 ? (1 + (rng() < C.mudProb ? 1 : 0)) : 0;
+    for (let m = 0; m < mc; m++) mud.push(C.mudMin + rng()*C.mudRand);
+    const frames = [], events = [], gain = new Array(n).fill(0), surges = new Array(n).fill(0);
+    const splitDone = { 25:0, 50:0, 75:0 };
+    let prevLeader = -1, leadChanges = 0, prevRank = null, step = 0;
+    const lead = () => { let b=0; for (let i=1;i<n;i++) if (h[i].pos>h[b].pos) b=i; return b; };
+    while (step < maxSteps) {
+      const lp = Math.max.apply(null, h.map(x=>x.pos)); // posição do líder
+      const reta = lp > FIM * C.retaAt;                  // entrou na reta final?
+      for (let i = 0; i < n; i++) {
+        const x = h[i]; if (x.finished) continue;
+        // passeio aleatório da velocidade (com leve viés positivo)
+        x.vel = Math.max(C.velMin, Math.min(C.velMax, x.vel + (rng()-C.velDriftBias)*C.velDrift));
+        // tropeço (só fora da reta): atrasa por um tempo
+        if (x.stumble > 0) x.stumble -= STEP; else if (!reta && rng() < C.tripProb) { x.stumble = C.tripMin + rng()*C.tripRand; events.push({step, t:'trip', i}); }
+        // arrancada (mais provável na reta)
+        if (x.burst > 0) x.burst -= STEP; else if (rng() < (reta ? C.burstProbReta : C.burstProb)) { x.burst = C.burstMin + rng()*C.burstRand; surges[i]++; events.push({step, t:'burst', i}); }
+        // multiplicadores combinados
+        let mult = 1; if (x.stumble > 0) mult *= C.stumbleSlow; if (x.burst > 0) mult *= C.burstBoost; if (reta) mult *= C.retaBoost;
+        for (const mz of mud) { if (Math.abs(x.pos - mz) < 2.5) { mult *= C.mudSlow; if (!x.muddone && rng() < C.mudHitProb) { x.muddone = true; events.push({step, t:'mud', i}); } } }
+        // avanço: velocidade efetiva + "rubber band" (puxa quem está atrás)
+        const eff = x.vel*mult + Math.max(0, lp - x.pos)*C.catchup;
+        x.pos = Math.min(FIM, x.pos + eff*STEP);
+        if (x.pos >= FIM && !x.finished) { x.finished = true; x.fs = step; } // passo de chegada
+      }
+      // parciais (25/50/75%)
+      C.splits.forEach(p => { if (!splitDone[p] && lp >= p) { splitDone[p] = 1; events.push({step, t:'split', p, i:lead()}); } });
+      // viradas de liderança
+      const li = lead(); if (prevLeader !== -1 && li !== prevLeader) { leadChanges++; events.push({step, t:'lead', i:li}); } prevLeader = li;
+      // ranking do passo -> conta ultrapassagens (gain)
+      const order = h.map((_,i)=>i).sort((a,b)=>h[b].pos-h[a].pos); const rank = new Array(n); order.forEach((idx,r)=>rank[idx]=r);
+      if (prevRank) { for (let i=0;i<n;i++) if (rank[i] < prevRank[i]) gain[i] += prevRank[i] - rank[i]; } prevRank = rank;
+      frames.push(h.map(x=>x.pos)); step++;
+      if (h.every(x=>x.finished)) break; // todos chegaram -> fim
+    }
+    // ordem final: por passo de chegada (fs), desempate por posição
+    const fin = h.map((x,i)=>({ i, fs:x.fs<0?step:x.fs, pos:x.pos })).sort((a,b)=>(a.fs-b.fs)||(b.pos-a.pos)).map(o=>o.i);
+    // "close" = 1º e 2º chegaram com <= closeSteps passos de diferença (photo finish)
+    const close = fin.length > 1 ? (h[fin[1]].fs - h[fin[0]].fs) <= C.closeSteps : false;
+    const result = { frames, events, order:fin, totalSteps:frames.length, STEP, FIM, close, leadChanges, gain, surges, mud, seed };
+    Log.debug('Sim','simulação pronta', { seed, n, passos:result.totalSteps, close, vencedor:fin[0], ms:+( ((performance&&performance.now)?performance.now():0) - t0 ).toFixed(1) });
+    return result;
+  }
+  return { simulate };
+})();
+
+/* ===================== Screens — troca de tela ===================== */
+App.Screens = (function(){
+  function show(id){ if (App.FX) App.FX.stop(); D.qsa('.screen').forEach(s => s.classList.remove('active')); const e = D.id(id); if (e) e.classList.add('active'); try { window.scrollTo(0, 0); } catch (_) {} Log.debug('Screens','tela ativa', { id }); }
+  return { show };
+})();
+
+/* ===================== Teams — equipes ===================== */
+App.Teams = (function(){
+  // Cor estável por equipe (atribuída na ordem de criação).
+  function color(t){ if (!(t in S.teamColors)) S.teamColors[t] = CFG.TEAMPAL[Math.max(0, S.teams.indexOf(t)) % CFG.TEAMPAL.length]; return S.teamColors[t]; }
+  function create(){
+    const inp = D.id('newTeam'); const n = inp.value.trim().slice(0,24); if (!n) return;
+    if (!S.teams.some(t => t.toLowerCase() === n.toLowerCase())) { S.teams.push(n); color(n); Log.info('Teams','equipe criada', { nome:n, total:S.teams.length }); }
+    else Log.debug('Teams','equipe duplicada ignorada', { nome:n });
+    inp.value = ''; renderChips(); buildSelect(); App.Store.save();
+  }
+  function remove(i){
+    const t = S.teams[i]; S.teams.splice(i,1);
+    Object.keys(S.teamOf).forEach(k => { if (S.teamOf[k] === t) delete S.teamOf[k]; });
+    Log.info('Teams','equipe removida', { nome:t });
+    renderChips(); buildSelect(); App.Roster.render();
+  }
+  let editingTeam = null;
+  function renderChips(){
+    const el = D.id('teamChips'); if (!el) return;
+    if (!S.teams.length) { el.innerHTML = '<div class="empty">Nenhuma equipe criada ainda.</div>'; editingTeam = null; return; }
+    el.innerHTML = S.teams.map((t,i) => {
+      if (i === editingTeam) return `<div class="chip editing"><span class="teamtag" style="background:${color(t)}">&nbsp;</span><input class="chip-edit teamedit" data-idx="${i}" value="${U.esc(t)}" maxlength="24" aria-label="Renomear equipe"><button class="x" data-action="removerEquipe" data-idx="${i}" aria-label="Remover equipe">&times;</button></div>`;
+      return `<div class="chip"><span class="teamtag" style="background:${color(t)}">&nbsp;</span><span class="n" tabindex="0" role="button" data-action="editarEquipe" data-idx="${i}" aria-label="Renomear equipe: ${U.esc(t)}" title="Clique ou Enter para renomear">${U.esc(t)}</span><button class="x" data-action="removerEquipe" data-idx="${i}" aria-label="Remover equipe">&times;</button></div>`;
+    }).join('');
+    if (editingTeam != null) { const inp = el.querySelector('.teamedit'); if (inp) { inp.focus(); try { inp.select(); } catch (e) {} D.on(inp, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(inp); } else if (e.key === 'Escape') { editingTeam = null; renderChips(); } }); D.on(inp, 'blur', () => commitEdit(inp)); } }
+  }
+  // Renomear equipe inline: propaga o novo nome para todos os membros (teamOf) e preserva a cor.
+  function startEdit(i){ if (i < 0 || i >= S.teams.length) return; editingTeam = i; renderChips(); }
+  function commitEdit(inp){
+    if (editingTeam == null || !inp) return;
+    const i = +inp.dataset.idx, old = S.teams[i]; if (old == null) { editingTeam = null; renderChips(); return; }
+    const nv = inp.value.trim().slice(0, 24); editingTeam = null;
+    if (nv && nv.toLowerCase() !== old.toLowerCase() && S.teams.some((t,j) => j !== i && t.toLowerCase() === nv.toLowerCase())) { App.Roster.msg('Já existe a equipe "' + nv + '".', false); renderChips(); return; }
+    if (nv && nv !== old) {
+      S.teams[i] = nv;
+      if (old in S.teamColors) { S.teamColors[nv] = S.teamColors[old]; delete S.teamColors[old]; } // preserva a cor
+      Object.keys(S.teamOf).forEach(k => { if (S.teamOf[k] === old) S.teamOf[k] = nv; });            // membros seguem o nome
+      Log.info('Teams','equipe renomeada', { de:old, para:nv });
+    }
+    renderChips(); buildSelect(); App.Roster.render(); App.Store.save();
+  }
+  function buildSelect(){
+    const s = D.id('teamSel');
+    s.innerHTML = S.teams.length ? S.teams.map(t => `<option value="${U.esc(t)}">${U.esc(t)}</option>`).join('') : '<option value="">(crie uma equipe)</option>';
+  }
+  // Placar das equipes no resultado: pontos = (N - colocação) somados.
+  function standingsHtml(){
+    const N = S.cavalos.length, score = {};
+    S.sim.order.forEach((idx,p) => { const t = S.cavalos[idx].team || 'Sem equipe'; score[t] = (score[t]||0) + (N - p); });
+    const ranked = Object.keys(score).sort((a,b)=>score[b]-score[a]); if (!ranked.length) return '';
+    const mx = score[ranked[0]];
+    return `<div class="tstand"><div class="tcrown">🏆 Equipe campeã: ${U.esc(ranked[0])}</div>` +
+      ranked.map(t => { const w = Math.round(score[t]/mx*100); const col = t==='Sem equipe' ? '#9b9a92' : color(t); return `<div class="tbar"><div class="tn"><i style="background:${col}"></i>${U.esc(t)}</div><div class="tt"><span style="width:${w}%;background:${col}"></span></div><div class="ts2">${score[t]} pts</div></div>`; }).join('') +
+      `</div>`;
+  }
+  return { color, create, remove, renderChips, buildSelect, standingsHtml, startEdit };
+})();
+
+/* ===================== Roster — participantes ===================== */
+App.Roster = (function(){
+  const MAX = CFG.MAX;
+  // Mensagem de feedback (linha #msg do cadastro). ok=true -> verde; senão vermelho.
+  // Toast global: feedback transitório visível em QUALQUER tela (o #toast é fixo, fora das .screen).
+  let toastTimer = null;
+  function msg(t, ok){
+    const el = D.id('toast'); if (!el) return;
+    el.textContent = t;
+    el.classList.toggle('err', ok === false);
+    el.classList.remove('act'); el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3400);
+  }
+  // Toast com ação (ex.: "Desfazer"). Fica clicável (act) e dura mais.
+  function msgAction(text, label, fn){
+    const el = D.id('toast'); if (!el) { try { fn && fn(); } catch (e) {} return; }
+    el.classList.remove('err');
+    el.innerHTML = `<span>${U.esc(text)}</span><button type="button" class="toast-act" data-toastundo>${U.esc(label)}</button>`;
+    el.classList.add('show', 'act');
+    const hide = () => el.classList.remove('show', 'act');
+    const btn = el.querySelector('[data-toastundo]'); if (btn) D.on(btn, 'click', () => { hide(); try { fn(); } catch (e) {} });
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(hide, 6000);
+  }
+  // Quebra um bloco de texto em nomes (vírgula/; /tab/linha) com limite de 40.
+  function parseNames(t){ return t.split(/[\n,;\t]+/).map(s => s.trim().slice(0,40)).filter(Boolean); }
+  function summary(add, dup, full){
+    const p = [];
+    if (add) p.push(`${add} adicionado${add>1?'s':''}`);
+    if (dup) p.push(`${dup} duplicado${dup>1?'s':''} ignorado${dup>1?'s':''}`);
+    if (full) p.push(`${full} além do limite de ${MAX}`);
+    if (p.length) msg(p.join(' · '), add > 0);
+  }
+  // Núcleo de inserção (compartilhado por addOne/addBulk). team pode ser null.
+  function addNames(names, team){
+    let add=0, dup=0, full=0;
+    for (const raw of names) {
+      const n = raw.trim().slice(0,40); if (!n) continue;
+      if (S.participantes.length >= MAX) { full++; continue; }
+      if (S.participantes.some(p => p.toLowerCase() === n.toLowerCase())) { dup++; continue; }
+      S.participantes.push(n); if (team) S.teamOf[n] = team; add++;
+    }
+    Log.info('Roster','addNames', { add, dup, full, total:S.participantes.length });
+    render(); summary(add, dup, full); return add > 0;
+  }
+  function addOne(){
+    const inp = D.id('inp'); const n = inp.value.trim(); if (!n) return;
+    const before = S.participantes.length;
+    const team = (S.mode === 'teams') ? D.id('teamSel').value : null;
+    addNames([n], team);
+    if (S.participantes.length > before) inp.value = '';
+  }
+  // Modo equipes: cada linha é "Nome, Equipe" (cria equipe nova se necessário).
+  function addBulkTeams(raw){
+    const lines = raw.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+    if (!lines.length) { msg('Cole alguns nomes primeiro.', false); return; }
+    let add=0, dup=0, full=0;
+    for (const line of lines) {
+      const parts = line.split(/[,;\t]/);
+      const name = (parts[0]||'').trim().slice(0,40);
+      const team = (parts.slice(1).join(',')||'').trim().slice(0,24);
+      if (!name) continue;
+      if (S.participantes.length >= MAX) { full++; continue; }
+      if (S.participantes.some(p => p.toLowerCase() === name.toLowerCase())) { dup++; continue; }
+      if (team && !S.teams.some(t => t.toLowerCase() === team.toLowerCase())) { S.teams.push(team); App.Teams.color(team); }
+      S.participantes.push(name); if (team) S.teamOf[name] = team; add++;
+    }
+    Log.info('Roster','addBulkTeams', { add, dup, full, total:S.participantes.length, equipes:S.teams.length });
+    App.Teams.renderChips(); App.Teams.buildSelect(); render(); summary(add, dup, full);
+  }
+  function addBulk(){
+    const raw = D.id('ta').value;
+    if (S.mode === 'teams') addBulkTeams(raw);
+    else { const names = parseNames(raw); if (!names.length) { msg('Cole alguns nomes primeiro.', false); return; } addNames(names); }
+    D.id('ta').value = '';
+  }
+  function remove(i){ const n = S.participantes[i]; S.participantes.splice(i,1); delete S.teamOf[n]; Log.info('Roster','removido', { nome:n, total:S.participantes.length }); render(); }
+  function clear(){
+    if (!S.participantes.length) { render(); return; }
+    const snap = { p: S.participantes.slice(), t: Object.assign({}, S.teamOf) }; // p/ desfazer
+    S.participantes = []; S.teamOf = {}; Log.info('Roster','lista limpa', { tinha: snap.p.length }); render();
+    msgAction('Lista limpa.', '↩️ Desfazer', () => { S.participantes = snap.p; S.teamOf = snap.t; Log.info('Roster','limpeza desfeita', { restaurados: snap.p.length }); render(); msg('Lista restaurada.', true); });
+  }
+  // Desenha a lista de participantes + atualiza contador e botão "Iniciar".
+  function render(){
+    App.Store.save(); // persiste o cadastro a cada mudança (no-op até o boot armar)
+    const el = D.id('lista'), n = S.participantes.length;
+    D.setText('count', n + (n === 1 ? ' participante' : ' participantes'));
+    const btn = D.id('btnStart'); if (btn) btn.disabled = n < 2;
+    const cb = D.id('btnClear'); if (cb) cb.style.display = n ? '' : 'none'; // "Limpar tudo" só com lista
+    updateTourNote();
+    if (!el) return; // sem DOM (ex.: testes em vm)
+    if (!n) { el.innerHTML = emptyHtml(); S.editing = null; return; } // estado vazio que convida
+    const hint = n >= 2 ? '<div class="listhint">✎ Toque no nome para editar • ⠿ arraste pelo punho para reordenar</div>' : '';
+    el.innerHTML = hint + S.participantes.map((nm,i) => {
+      const tg = (S.mode === 'teams' && S.teamOf[nm]) ? `<span class="teamtag tclick" role="button" tabindex="0" data-action="trocarEquipe" data-idx="${i}" style="background:${App.Teams.color(S.teamOf[nm])}" title="Toque para trocar a equipe">${U.esc(S.teamOf[nm])}</span>` : '';
+      if (i === S.editing) return `<div class="chip editing" data-idx="${i}"><span class="e">🙂</span><input class="chip-edit" data-idx="${i}" value="${U.esc(nm)}" maxlength="40" aria-label="Editar nome"><button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+      return `<div class="chip" data-idx="${i}"><span class="grip" tabindex="0" role="button" aria-label="Mover ${U.esc(nm)} — use as setas ↑ e ↓" title="Arraste ou use ↑/↓ para reordenar">⠿</span><span class="e">🙂</span><span class="n" tabindex="0" role="button" data-action="editarNome" data-idx="${i}" aria-label="Editar nome: ${U.esc(nm)}" title="Clique ou Enter para editar">${U.esc(nm)}</span>${tg}<button class="x" data-action="removerP" data-idx="${i}" aria-label="Remover">&times;</button></div>`;
+    }).join('');
+    if (S.editing != null) { const inp = el.querySelector('.chip-edit'); if (inp) { inp.focus(); try { inp.select(); } catch (e) {} D.on(inp, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commitEdit(inp); } else if (e.key === 'Escape') { S.editing = null; render(); } }); D.on(inp, 'blur', () => commitEdit(inp)); } }
+  }
+  // Estado vazio: passo a passo (adaptado ao modo) + botão de nomes de exemplo.
+  function emptyHtml(){
+    const steps = ({
+      single:['Adicione ou cole os nomes dos participantes','Largue a corrida — o cavalo mais rápido vence 🏇','Compartilhe o resultado por link 🔗'],
+      tournament:['Adicione os nomes — eles formam as baterias','Os vencedores avançam até a grande final 🏆','Compartilhe o resultado por link 🔗'],
+      teams:['Crie as equipes no painel acima','Adicione cada participante à sua equipe 👥','Vence o indivíduo e a equipe campeã por pontos 🏆']
+    })[S.mode] || [];
+    const li = steps.map((t,i) => `<div class="ec-step"><span class="ec-num">${i+1}</span><span>${U.esc(t)}</span></div>`).join('');
+    return `<div class="empty-cta"><div class="ec-steps">${li}</div><button class="btn btn-go" data-action="exemplos">🎲 Usar nomes de exemplo</button><div class="hint" style="margin-top:10px">Ou adicione os nomes acima — pelo menos 2 para começar.</div></div>`;
+  }
+  // Torneio: prévia de quantas baterias se formam com a lista atual.
+  function updateTourNote(){
+    const el = D.id('tourNote'); if (!el) return;
+    const n = S.participantes.length;
+    if (S.mode === 'tournament' && n >= 2) {
+      const h = Math.max(1, Math.ceil(n / CFG.MAXHEAT));
+      el.textContent = `🏁 ${n} participantes → ${h} bateria${h > 1 ? 's' : ''}; os vencedores avançam até a final.`;
+      el.style.display = '';
+    } else el.style.display = 'none';
+  }
+  // Preenche com nomes de exemplo (adaptado ao modo) — atalho para experimentar.
+  function exemplos(){
+    if (S.participantes.length) return; // só no estado vazio
+    if (S.mode === 'teams') {
+      let added = 0;
+      [['Marketing',['Ana','Bruno','Carla','Davi']],['Vendas',['Eva','Fábio','Gabi','Hugo']],['Produto',['Ivo','Jana','Lia','Caio']]].forEach(g => {
+        const t = g[0]; if (!S.teams.some(x => x.toLowerCase() === t.toLowerCase())) { S.teams.push(t); App.Teams.color(t); }
+        g[1].forEach(nm => { if (S.participantes.length < MAX && !S.participantes.some(p => p.toLowerCase() === nm.toLowerCase())) { S.participantes.push(nm); S.teamOf[nm] = t; added++; } });
+      });
+      App.Teams.renderChips(); App.Teams.buildSelect(); render(); summary(added, 0, 0);
+    } else {
+      const base = ['Ana','Bruno','Carla','Davi','Eva','Fábio','Gabi','Hugo'];
+      addNames(S.mode === 'tournament' ? base.concat(['Ivo','Jana','Lia','Caio']) : base);
+    }
+    Log.info('Roster','exemplos preenchidos', { mode:S.mode, total:S.participantes.length });
+  }
+  // Edição inline do nome (clique no nome → input; Enter/blur salva, Esc cancela).
+  function startEdit(i){ if (i < 0 || i >= S.participantes.length) return; S.editing = i; render(); }
+  function commitEdit(inp){
+    if (S.editing == null || !inp) return;
+    const i = +inp.dataset.idx, old = S.participantes[i]; if (old == null) { S.editing = null; render(); return; }
+    const nv = inp.value.trim().slice(0, 40); S.editing = null;
+    if (nv && nv.toLowerCase() !== old.toLowerCase() && S.participantes.some((p,j) => j !== i && p.toLowerCase() === nv.toLowerCase())) { msg('Já existe "' + nv + '" na lista.', false); render(); return; }
+    if (nv && nv !== old) { S.participantes[i] = nv; if (S.teamOf[old] != null) { S.teamOf[nv] = S.teamOf[old]; delete S.teamOf[old]; } Log.info('Roster','nome editado', { de:old, para:nv }); }
+    render();
+  }
+  // Reordenar por arrastar (drag-and-drop): move o participante `from` para a posição `to`.
+  function reorder(from, to){ if (from === to || from < 0 || to < 0 || from >= S.participantes.length || to >= S.participantes.length) return; const [m] = S.participantes.splice(from, 1); S.participantes.splice(to, 0, m); Log.info('Roster','reordenado', { from, to }); render(); }
+  // Trocar a equipe de um participante: cicla para a próxima equipe (toque na etiqueta colorida).
+  function cycleTeam(i){
+    if (S.mode !== 'teams' || !S.teams.length || i < 0 || i >= S.participantes.length) return;
+    const n = S.participantes[i], next = S.teams[(S.teams.indexOf(S.teamOf[n]) + 1) % S.teams.length];
+    S.teamOf[n] = next; Log.info('Roster','equipe trocada', { nome:n, para:next }); render();
+  }
+  return { msg, parseNames, addNames, addOne, addBulk, addBulkTeams, remove, clear, render, startEdit, reorder, exemplos, cycleTeam };
+})();
+
+/* ===================== Modes — alterna o modo de sorteio ===================== */
+App.Modes = (function(){
+  function set(m){
+    S.mode = m;
+    D.qsa('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    D.setText('modeHint', CFG.MODE_HINTS[m]);
+    D.id('teamsBox').style.display = m === 'teams' ? 'block' : 'none';
+    D.id('teamSel').style.display = m === 'teams' ? '' : 'none';
+    const sc = D.id('screen-cadastro'); if (sc) sc.classList.toggle('m-teams', m === 'teams'); // evita overflow do input-row no mobile
+    const pmw = D.id('prizeModeWrap'); if (pmw) pmw.style.display = (m === 'tournament') ? 'none' : ''; // sequencial não se aplica a torneio
+    if (m === 'teams') App.Teams.buildSelect();
+    const btn = D.id('btnStart'); if (btn) btn.textContent = m === 'tournament' ? 'Iniciar torneio' : (m === 'teams' ? 'Iniciar (equipes)' : 'Iniciar corrida');
+    Log.info('Modes','modo alterado', { mode:m });
+    App.Roster.render();
+  }
+  return { set };
+})();
+
+/* ===================== Render — pista, cavalos, badges ===================== */
+/* Só DESENHA o que a simulação já decidiu. Mudanças de resultado vão em Sim;
+   mudanças visuais vêm para cá.                                              */
+App.Render = (function(){
+  // Monta o HTML da pista (raias, cavalos, lama, linha de chegada).
+  function pista(){
+    const n = S.cavalos.length;
+    const h = n <= 10 ? 48 : (n <= 16 ? 40 : Math.max(20, Math.floor(660/n)));   // altura da raia
+    const em = h < 30 ? 0 : Math.round(h*.5), nf = h < 26 ? 10 : 11, bs = h < 28 ? 16 : 19, fs = h < 26 ? 9 : 10;
+    const dot = Math.min(12, Math.round(h*.32)), showTeam = (S.mode === 'teams' && h >= 40);
+    const mudHtml = S.sim ? S.sim.mud.map(mz => `<div class="mud" style="left:${mz}%"></div>`).join('') : '';
+    D.id('pista').innerHTML = S.cavalos.map((c,i) => {
+      const marker = em ? `<span class="h" style="font-size:${em}px">${c.emoji}</span>` : `<span class="dot" style="width:${dot}px;height:${dot}px;background:${c.cor}"></span>`;
+      const teamHtml = (showTeam && c.team) ? `<span class="tt2" style="background:${App.Teams.color(c.team)}">${U.esc(c.team)}</span>` : '';
+      return `<div class="raia" id="raia-${i}" style="height:${h}px"><div class="raia-n">${i+1}</div><div class="track">${mudHtml}<div class="finish"></div><div class="cav" id="cav-${i}" style="left:0%"><span class="badge" id="bdg-${i}" style="width:${bs}px;height:${bs}px;font-size:${fs}px">${i+1}</span>${marker}<span class="label" style="color:${c.cor};font-size:${nf}px">${U.esc(c.nome)}</span>${teamHtml}</div></div></div>`;
+    }).join('');
+  }
+  // Interpola as posições no instante t (ms) entre dois frames pré-calculados.
+  function frameAt(t){
+    if (!S.sim || !S.sim.frames || !S.sim.frames.length) return [];
+    const frames = S.sim.frames, lastF = frames[frames.length-1];
+    let i0 = Math.floor(t / S.sim.STEP);
+    if (i0 >= frames.length-1) return lastF; if (i0 < 0) i0 = 0;
+    const i1 = i0+1, a = (t/S.sim.STEP) - i0, A = frames[i0], B = frames[i1];
+    if (!A || !B) return lastF;
+    const r = new Array(A.length); for (let k=0;k<A.length;k++) r[k] = A[k] + (B[k]-A[k])*a; return r;
+  }
+  // Atualiza o número/cor do badge de um cavalo conforme sua colocação.
+  function setBadge(idx, rank){ const b = D.id('bdg-'+idx); if (b) { b.textContent = rank+1; b.style.background = rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } }
+  // Recalcula as colocações ao vivo: quem cruzou usa a ordem final; o resto
+  // é ranqueado pela posição atual.
+  function updateRanks(p){
+    if (!S.sim) return;
+    const FIM = S.sim.FIM, n = p.length, fr = new Array(n);
+    S.sim.order.forEach((idx,r) => { fr[idx] = r; });
+    const racing = [];
+    for (let i=0;i<n;i++){ if (p[i] >= FIM-0.1) setBadge(i, fr[i]); else racing.push(i); }
+    const finished = n - racing.length;
+    racing.sort((a,b)=>p[b]-p[a]);
+    racing.forEach((idx,k) => setBadge(idx, finished+k));
+  }
+  return { pista, frameAt, setBadge, updateRanks };
+})();
+
+/* ===================== Narration — falas e reações ===================== */
+/* Mantém os bancos de frases e reage aos eventos da corrida (via Bus). Para
+   adicionar uma reação nova a um evento, edite onRaceEvent (ou assine o Bus). */
+App.Narration = (function(){
+  const N_INI  = ['E os cavalos disparam na largada!','A emoção toma conta da pista!','Largada eletrizante!','O público está em pé!'];
+  const N_MEIO = [l=>`${l} abre vantagem na ponta!`, l=>`${l} está voando!`, ()=>`Disputa acirradíssima na frente!`, l=>`${l} quer muito essa vitória!`, ()=>`O pelotão está coladinho!`, l=>`${l} acelera por fora!`];
+  const N_BURST= [n=>`${n} DISPARA!`, n=>`Que arrancada de ${n}!`, n=>`${n} muda de marcha!`];
+  const N_RETA = ['RETA FINAL! Todos a mil!','É agora ou nunca! Reta final!','O público delira na reta final!'];
+  const N_FIM  = [v=>`${v} cruza a linha em primeiro!`, v=>`É ${v}! Que corrida inesquecível!`, v=>`${v} vence! Temos um campeão!`];
+  const rnd = U.rndPick;
+  // Exibe um texto na faixa de narração (com fade) e fala (voz). spk: texto alt. p/ voz.
+  function narrar(t, fire, prio, spk){
+    // Ritmo legível: descarta falas NÃO prioritárias que chegam cedo demais —
+    // colapsa rajadas de eventos (ex.: 6 "X pega a lama" em <2s) numa só, pra o
+    // texto não "piscar". Frases prioritárias (largada, reta, vencedor) sempre passam.
+    if (!prio && !canNarr()) { Log.debug('Narration','fala descartada (muito próxima da anterior)', { t }); return; }
+    const el = D.id('narr'); S.lastNarr = performance.now();
+    el.classList.toggle('fire', !!fire); el.style.opacity = '0';
+    setTimeout(() => { el.textContent = t; el.style.opacity = '1'; }, 170);
+    App.Audio.say(spk !== undefined ? spk : t, prio);
+  }
+  // Evita narração sobreposta cedo demais.
+  function canNarr(){ return performance.now() - S.lastNarr > CFG.timing.narrMinGap; }
+  // Índice do líder atual segundo as posições do frame em render.
+  function curLeaderIdx(){ let b=0; for (let i=1;i<S.positions.length;i++) if (S.positions[i] > S.positions[b]) b=i; return b; }
+  // Narração de fundo (largada + comentários periódicos do líder).
+  function startLoop(){
+    narrar(rnd(N_INI));
+    const loop = () => {
+      S.narrTimer = setTimeout(() => {
+        if (S.ended) return;
+        if (canNarr()) { const lider = S.cavalos[curLeaderIdx()]; if (lider) narrar(rnd(N_MEIO)(lider.nome)); }
+        loop();
+      }, CFG.timing.narrLoopMin + Math.random()*CFG.timing.narrLoopRand);
+    };
+    loop();
+  }
+  // Fala da reta final (chamada pela corrida ao entrar na reta).
+  function narrateReta(){ const tx = rnd(N_RETA); narrar(tx, true, true, tx.toLowerCase()); }
+  function fimLine(nome){ return rnd(N_FIM)(nome); }
+  // Reação aos eventos discretos da corrida (assina o Bus em 'race:event').
+  function onRaceEvent({ ev, reta }){
+    const nm = ev.i != null ? (S.cavalos[ev.i] || {}).nome : '';
+    Log.debug('Narration','evento', { t:ev.t, i:ev.i, nome:nm, reta });
+    if (ev.t === 'trip')      { narrar(`Ohhh! ${nm} tropeça!`, reta, false, `${nm} tropeça!`); App.Audio.reactOhh(); }
+    else if (ev.t === 'mud')  { narrar(`${nm} pega a lama e perde ritmo!`, reta); App.Audio.reactOhh(); }
+    else if (ev.t === 'split'){ narrar(`Parcial dos ${ev.p}%: ${nm} na frente!`, reta); }
+    else if (ev.t === 'burst'){ if (canNarr()) { const tx = rnd(N_BURST)(nm); narrar(tx, reta, false, tx.toLowerCase()); App.Audio.reactCheer(); } }
+    else if (ev.t === 'lead') { if (canNarr()) { narrar(`Que virada! ${nm} assume a ponta!`, reta); App.Audio.reactCheer(); } }
+  }
+  App.Bus.on('race:event', onRaceEvent);   // <- ponto de extensão: some reações aqui
+  return { narrar, canNarr, startLoop, narrateReta, fimLine };
+})();
+
+/* ===================== PhotoFinish — foto da chegada ===================== */
+/* Em chegadas apertadas (sim.close), congela e desenha num <canvas> um zoom
+   da linha de chegada com os cavalos coladinhos e a margem da vitória.       */
+App.PhotoFinish = (function(){
+  const P = CFG.photo;
+  // Converte o gap (em unidades de pista) numa palavra de margem (focinho/cabeça...).
+  function marginWord(gap){ const g = Math.abs(gap); for (const [thr, word] of P.margins) if (g < thr) return word; return P.margins[P.margins.length-1][1]; }
+  // Desenha a "foto". Retorna {winner, marginWord} para a narração/legenda.
+  function draw(){
+    const cv = D.id('photoCanvas'), fb = { winner:S.cavalos[S.sim.order[0]].nome, marginWord:'pouco' };
+    if (!cv || !S.sim || !S.sim.frames || !S.sim.frames.length) return fb;
+    const DPR = Math.min(2, window.devicePixelRatio || 1), W = P.W, H = P.H, ctx = cv.getContext('2d'); if (!ctx) return fb;
+    cv.width = W*DPR; cv.height = H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    const FIM = S.sim.FIM, winIdx = S.sim.order[0];
+    // Frame do instante em que o VENCEDOR cruza a linha.
+    let pf = S.sim.frames.length-1; for (let f=0;f<S.sim.frames.length;f++){ if (S.sim.frames[f][winIdx] >= FIM-1e-6){ pf=f; break; } }
+    const pos = S.sim.frames[pf], lo = FIM - P.depth, finishX = W*P.finishX, leftX = W*P.leftX;
+    const mapX = p => leftX + Math.max(0, Math.min(1.04, (p-lo)/(FIM-lo))) * (finishX-leftX);
+    // Contendores a mostrar: top 2 sempre + 3º/4º se estiverem dentro do zoom.
+    const show = [S.sim.order[0], S.sim.order[1]];
+    for (let k=2;k<Math.min(P.maxShow, S.sim.order.length);k++){ if (pos[S.sim.order[k]] >= lo) show.push(S.sim.order[k]); }
+    const n = show.length, top = 24, bot = H-38, laneH = (bot-top)/n;
+    // fundo + faixa superior
+    ctx.fillStyle = '#ecd9bd'; ctx.fillRect(0,0,W,H); ctx.fillStyle = '#cdb892'; ctx.fillRect(0,0,W,14);
+    // riscos de velocidade
+    ctx.strokeStyle = 'rgba(0,0,0,.045)'; ctx.lineWidth = 1; for (let gx=-20;gx<W;gx+=26){ ctx.beginPath(); ctx.moveTo(gx,16); ctx.lineTo(gx-16,H-30); ctx.stroke(); }
+    // linha de chegada quadriculada
+    for (let yy=top; yy<bot; yy+=8){ ctx.fillStyle = Math.floor((yy-top)/8)%2 ? '#2c2c2a' : '#fff'; ctx.fillRect(finishX,yy,8,8); }
+    ctx.fillStyle = 'rgba(44,44,42,.85)'; ctx.fillRect(finishX-1.5,top,1.5,bot-top);
+    show.forEach((idx, rank) => {
+      const c = S.cavalos[idx], cy = top + laneH*(rank+.5), hx = mapX(pos[idx]), hsz = Math.min(40, laneH*.82);
+      if (rank > 0){ ctx.strokeStyle = 'rgba(0,0,0,.08)'; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(0, top+laneH*rank); ctx.lineTo(W, top+laneH*rank); ctx.stroke(); ctx.setLineDash([]); }
+      // rastro (motion blur) + cavalo (espelhado p/ olhar à direita)
+      for (let b=3;b>=1;b--){ ctx.globalAlpha = .09/b; ctx.save(); ctx.translate(hx-b*8, cy); ctx.scale(-1,1); ctx.font = hsz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.emoji,0,0); ctx.restore(); }
+      ctx.globalAlpha = 1; ctx.save(); ctx.translate(hx, cy); ctx.scale(-1,1); ctx.font = hsz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.emoji,0,0); ctx.restore();
+      if (rank === 0){ ctx.strokeStyle = '#BA7517'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(hx, cy, hsz*.6, 0, 6.28); ctx.stroke(); } // anel do vencedor
+      const bx = leftX+2; ctx.fillStyle = rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; ctx.beginPath(); ctx.arc(bx+9, cy, 9, 0, 6.28); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(rank+1), bx+9, cy+.5);
+      let nm = c.nome; if (nm.length > 16) nm = nm.slice(0,15)+'…'; ctx.textAlign='left'; ctx.fillStyle='#2c2c2a'; ctx.font='bold 13px sans-serif'; ctx.fillText(nm, bx+24, cy+.5);
+    });
+    const marginWordVal = marginWord(pos[S.sim.order[0]] - pos[S.sim.order[1]]);
+    ctx.fillStyle = 'rgba(44,44,42,.92)'; ctx.fillRect(0, H-28, W, 28);
+    ctx.fillStyle = '#fff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 14px sans-serif';
+    ctx.fillText('🏁 ' + S.cavalos[winIdx].nome + ' vence por ' + marginWordVal + '!', W/2, H-14);
+    Log.info('PhotoFinish','foto desenhada', { vencedor:S.cavalos[winIdx].nome, margem:marginWordVal, mostrados:n });
+    return { winner:S.cavalos[winIdx].nome, marginWord:marginWordVal };
+  }
+  // Mostra o overlay com a foto + flash de obturador + narração; chama cb ao fim.
+  function show(cb){
+    const o = D.id('flash'), info = draw();
+    const sub = D.id('photoSub'); if (sub) sub.textContent = 'Vitória por ' + info.marginWord + ' — confirmada na foto';
+    o.style.display = 'flex';
+    const sf = D.id('shutterFlash'); if (sf){ sf.classList.remove('go'); void sf.offsetWidth; sf.classList.add('go'); }
+    App.Audio.shutter();
+    App.Narration.narrar('PHOTO FINISH! ' + info.winner + ' leva por ' + info.marginWord + '!', true, true, 'Photo finish! ' + info.winner + ' por ' + info.marginWord);
+    App.Audio.crowdSet(CFG.crowd.photo);
+    App.Timing.seq(CFG.timing.photoHold, () => { o.style.display = 'none'; cb(); });
+  }
+  return { marginWord, draw, show };
+})();
+
+/* ===================== FX — confete/fogos da comemoração ===================== */
+App.FX = (function(){
+  let gen = 0;
+  // Encerra a comemoração: invalida loops em andamento, cancela o RAF e LIMPA/esconde
+  // o canvas — senão o último frame de confete fica "preso" sobre a próxima tela
+  // quando se troca de tela rápido (nova corrida, próximo, reprisar, editar...).
+  function stop(){
+    gen++;
+    if (S.celebRaf) { cancelAnimationFrame(S.celebRaf); S.celebRaf = null; }
+    const cv = D.id('confetti'); if (cv) { const ctx = cv.getContext('2d'); if (ctx) ctx.clearRect(0,0,cv.width,cv.height); cv.style.display = 'none'; }
+  }
+  function celebration(){
+    stop();                       // nunca empilha duas comemorações
+    const myGen = gen;
+    const cv = D.id('confetti'), ctx = cv.getContext('2d');
+    cv.style.display = 'block'; cv.width = window.innerWidth; cv.height = window.innerHeight;
+    const cols = ['#534AB7','#D85A30','#1D9E75','#D4537E','#BA7517','#185FA5','#E24B4A','#FAC775'];
+    const parts = [];
+    for (let i=0;i<150;i++) parts.push({ fw:0, x:Math.random()*cv.width, y:-20-Math.random()*cv.height*.5, w:6+Math.random()*6, h:8+Math.random()*8, vx:(Math.random()-.5)*2, vy:2+Math.random()*4, rot:Math.random()*6.28, vr:(Math.random()-.5)*.3, c:cols[(Math.random()*cols.length)|0] });
+    function firework(x,y){ const c = cols[(Math.random()*cols.length)|0]; for (let i=0;i<36;i++){ const a=i/36*6.28, sp=2+Math.random()*3; parts.push({ fw:1, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:1, c }); } App.Audio.pop(); }
+    const t0 = performance.now(); let lastFw = 0;
+    const draw = now => {
+      if (myGen !== gen) return;  // cancelada por nova comemoração ou troca de tela
+      const t = now - t0; ctx.clearRect(0,0,cv.width,cv.height);
+      if (t-lastFw > 650 && t < 3200){ lastFw = t; firework(Math.random()*cv.width, cv.height*.2 + Math.random()*cv.height*.3); }
+      for (let k=parts.length-1;k>=0;k--){ const p = parts[k];
+        if (p.fw){ p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=.012; if (p.life<=0){ parts.splice(k,1); continue; } ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,6.28); ctx.fill(); }
+        else { p.x+=p.vx; p.y+=p.vy; p.vy+=.04; p.rot+=p.vr; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=Math.max(0,1-t/4500); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore(); }
+      }
+      if (t < 4600) S.celebRaf = requestAnimationFrame(draw); else { ctx.clearRect(0,0,cv.width,cv.height); cv.style.display='none'; S.celebRaf = null; }
+    };
+    S.celebRaf = requestAnimationFrame(draw);
+  }
+  return { celebration, stop };
+})();
+
+/* ===================== Race — orquestra UMA corrida ===================== */
+/* Fluxo: run() -> largada (contagem) -> startPlayback() -> endRace() ->
+   (photo finish se close) -> afterRace() -> Torneio/Resultado.              */
+App.Race = (function(){
+  const T = CFG.timing;
+
+  // ---- Largada visual (contagem 3/2/1/VAI) ----
+  function showCD(t){ const cd = D.id('cd'), n = D.id('cd-num'); cd.style.display='flex'; n.textContent=t; n.style.color = t==='VAI!'?'var(--go)':'var(--fire)'; n.style.animation='none'; void n.offsetWidth; n.style.animation='pop .5s ease'; }
+  function hideCD(){ D.id('cd').style.display = 'none'; }
+  function setHeader(t, fire){ const h = D.id('titulo'); h.textContent = t; h.classList.toggle('fire', !!fire); }
+
+  // Semente escolhida: usa a do campo (se numérica e !forceRandom), senão aleatória.
+  function chosenSeed(forceRandom){ const v = D.id('seedInp').value.trim(); if (!forceRandom && v && /^\d+$/.test(v)) return parseInt(v,10) >>> 0; return (Math.random()*4294967296) >>> 0; }
+
+  // Cancela animação/timers/sons em andamento e invalida loops antigos (gen++).
+  function clearAll(){
+    S.gen++;
+    if (S.raf) cancelAnimationFrame(S.raf);
+    if (App.FX) App.FX.stop(); // encerra e LIMPA o confete (não deixa frame preso na tela)
+    clearTimeout(S.narrTimer); App.Timing.clearSeq();
+    App.Audio.stopHeart(); App.Audio.crowdStop();
+    hideCD(); const fl = D.id('flash'); if (fl) fl.style.display = 'none';
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    S.ended = false;
+    Log.debug('Race','clearAll — estado de animação resetado', { gen:S.gen });
+  }
+
+  // Roda uma corrida com os nomes/semente/rótulo dados.
+  function run(names, seed, label){
+    App.Audio.ensure(); clearAll();
+    S.prizes = ['prizeInp','prizeInp2','prizeInp3'].map(id => { const el = D.id(id); return el ? el.value.trim().slice(0,60) : ''; });
+    S.prize = S.prizes[0] || '';
+    // Sprite NÃO depende da ordem do cadastro: é sorteado pela semente (reproduzível pelo link;
+    // RNG separado da simulação) e só aparece na largada — ninguém "escolhe" quem pega o quê.
+    const sprites = App.RNG.shuffle(names.map((_, i) => U.horseEmoji(i)), App.RNG.mulberry32(seed >>> 0));
+    S.cavalos = names.map((nome,i) => ({ nome, team:(S.teamOf[nome]||null), emoji:sprites[i], cor:U.corOf(i), idx:i }));
+    S.sim = App.Sim.simulate(seed, S.cavalos.length);
+    Log.info('Race','corrida iniciada', { n:S.cavalos.length, seed, mode:S.mode, label, close:S.sim.close });
+    App.Render.pista();
+    App.Screens.show('screen-corrida');
+    D.setText('racelabel', label || '');
+    setHeader('Preparando...', false);
+    const showPrize = (S.mode !== 'tournament') || (S.tour && S.tour.isFinal);
+    const emDisputa = S.seq ? (S.seq.prizes[S.seq.idx] || '') : (S.prizes || []).filter(Boolean).join(' · ');
+    const prizePrefix = S.seq ? ('🏆 Disputando o ' + (S.seq.idx + 1) + 'º prêmio: ') : '🏆 Em disputa: ';
+    D.setText('raceprize', (emDisputa && showPrize) ? (prizePrefix + emDisputa) : '');
+    const nv = D.id('narr'); nv.classList.remove('fire'); nv.textContent = 'Cavalos a postos na linha de largada...';
+    D.id('pista').classList.remove('reta');
+    if (App.View.reducedMotion()) return runFast(); // respeita prefers-reduced-motion
+    App.View.announce('Corrida começando.');
+    App.Audio.crowdStart(); App.Audio.crowdSet(CFG.crowd.idle); App.Audio.bugle(); App.Audio.say('Cavalos a postos!', true);
+    // contagem regressiva
+    App.Timing.seq(T.cd3, () => { showCD('3'); App.Audio.beep(580,.16,'square',.16); App.Audio.say('três', true); });
+    App.Timing.seq(T.cd2, () => { showCD('2'); App.Audio.beep(580,.16,'square',.16); App.Audio.say('dois', true); });
+    App.Timing.seq(T.cd1, () => { showCD('1'); App.Audio.beep(580,.16,'square',.16); App.Audio.say('um', true); });
+    App.Timing.seq(T.go, () => { showCD('VAI!'); App.Audio.gun(); App.Audio.crowdSet(CFG.crowd.start); App.Audio.say('E largaram!', true); setHeader('Corrida em andamento', false); App.Narration.startLoop(); startPlayback(); });
+    App.Timing.seq(T.hideCd, () => hideCD());
+  }
+
+  // Reproduz os frames pré-calculados em tempo real; dispara eventos e a reta.
+  function startPlayback(){
+    if (!S.sim || !S.sim.frames || !S.sim.frames.length) { Log.warn('Race','startPlayback sem frames'); return; }
+    S.ended = false; const myGen = S.gen; S.positions = [];
+    let simTime = 0; const dur = S.sim.totalSteps * S.sim.STEP; let last = performance.now(), evIdx = 0, reta = false;
+    Log.debug('Race','playback iniciado', { dur:Math.round(dur), frames:S.sim.totalSteps });
+    // Auto-scroll: em campos grandes (pista maior que a tela), segue o líder — suave e
+    // sem brigar com o usuário (pausa 1.6s após rolagem manual). Layout fixo na corrida,
+    // então o centro de cada raia é medido UMA vez (sem reflow por frame).
+    const vh = window.innerHeight, docH = document.documentElement.scrollHeight, maxScroll = docH - vh;
+    const canFollow = docH > vh + 80, rowY = [];
+    if (canFollow) for (let i=0;i<S.cavalos.length;i++){ const r = D.id('raia-'+i); rowY[i] = r ? (r.getBoundingClientRect().top + window.scrollY + r.offsetHeight/2) : 0; }
+    const loop = now => {
+      if (S.ended || S.gen !== myGen) return;           // corrida cancelada/reiniciada
+      const dt = Math.min(now-last, 50); last = now;
+      S.positions = App.Render.frameAt(simTime);
+      const lp = S.positions.length ? Math.max.apply(null, S.positions) : 0;
+      simTime += dt;
+      for (let i=0;i<S.positions.length;i++){ const el = D.id('cav-'+i); if (el) el.style.left = S.positions[i].toFixed(2)+'%'; }
+      App.Render.updateRanks(S.positions);
+      if (canFollow && performance.now() - (S.userScrollAt || 0) > 1600) {            // segue o PELOTÃO da frente
+        let sy = 0, sw = 0;                                                            // centroide ponderado: menos "tremida" em viradas
+        for (let i=0;i<S.positions.length;i++){ const w = S.positions[i] - (lp - 6); if (w > 0) { sy += rowY[i]*w; sw += w; } }
+        const center = sw > 0 ? sy/sw : rowY[U.argmax(S.positions)], cur = window.scrollY;
+        const target = Math.max(0, Math.min(center - vh * 0.45, maxScroll));
+        if (Math.abs(target - cur) >= 4) window.scrollTo(0, cur + (target - cur) * 0.1);
+      }
+      if (now - S.lastGalope > (reta ? T.galopeReta : T.galopeFlat)) { App.Audio.galope(reta); S.lastGalope = now; }
+      if (!reta && lp > S.sim.FIM*CFG.sim.retaAt) { reta = true; onReta(); }
+      // dispara eventos cujo passo já foi alcançado (Narração reage via Bus)
+      const ns = simTime / S.sim.STEP;
+      while (evIdx < S.sim.events.length && S.sim.events[evIdx].step <= ns) { App.Bus.emit('race:event', { ev:S.sim.events[evIdx], reta }); evIdx++; }
+      if (simTime >= dur) { endRace(); return; }
+      S.raf = requestAnimationFrame(loop);
+    };
+    S.raf = requestAnimationFrame(loop);
+  }
+
+  // Entrada na reta final (visual + som + narração).
+  function onReta(){
+    Log.info('Race','reta final');
+    setHeader('🔥 Reta final!', true);
+    D.id('pista').classList.add('reta');
+    App.Narration.narrateReta();
+    App.Audio.bell(); setTimeout(App.Audio.bell, 300);
+    App.Audio.crowdSet(CFG.crowd.reta); App.Audio.startHeart();
+  }
+
+  // Fixa posições/colocações finais (compartilhado pelo fim normal e pelo modo rápido).
+  function placeFinal(){
+    const fin = S.sim.frames[S.sim.totalSteps-1] || [];
+    for (let i=0;i<fin.length;i++){ const el = D.id('cav-'+i); if (el) el.style.left = fin[i].toFixed(2)+'%'; }
+    S.sim.order.forEach((idx,rank) => { const b = D.id('bdg-'+idx); if (b){ b.textContent = rank+1; b.style.background = rank===0?'#BA7517':rank===1?'#888':rank===2?'#993C1D':'#aaa'; } });
+    S.sim.order.slice(0,3).forEach(i => { const r = D.id('raia-'+i); if (r) r.style.background = 'rgba(29,158,117,.16)'; });
+  }
+  // Movimento reduzido: pula contagem + animação e vai direto ao resultado.
+  function runFast(){
+    S.ended = true; setHeader('Resultado', false); placeFinal();
+    const v = S.cavalos[S.sim.order[0]];
+    const nv = D.id('narr'); if (nv) nv.textContent = '🏁 ' + v.nome + ' venceu!';
+    App.Audio.winnerFanfare();
+    Log.info('Race','movimento reduzido — resultado direto', { vencedor:v.nome });
+    App.Timing.seq(500, () => afterRace());
+  }
+  // Pular: encerra contagem/animação/foto e vai direto ao resultado (mesmo destino
+  // do fim normal — torneio/sequência/single via afterRace). Útil em corridas grandes/mobile.
+  function skip(){
+    if (S.ended || !S.sim) return;
+    App.Timing.clearSeq(); clearTimeout(S.narrTimer);
+    S.ended = true; if (S.raf) cancelAnimationFrame(S.raf);
+    App.Audio.stopHeart(); hideCD();
+    const fl = D.id('flash'); if (fl) fl.style.display = 'none'; // some a foto, se aberta
+    setHeader('Resultado', false);
+    placeFinal();
+    const v = S.cavalos[S.sim.order[0]]; const nv = D.id('narr'); if (nv) { nv.classList.remove('fire'); nv.textContent = '🏁 ' + v.nome + ' venceu!'; }
+    App.Audio.crowdSet(CFG.crowd.end);
+    Log.info('Race','corrida pulada → resultado', { vencedor:v.nome });
+    afterRace();
+  }
+  // Fim da corrida: fixa posições/colocações finais; foto se chegada apertada.
+  function endRace(){
+    if (S.ended) return; S.ended = true;
+    if (S.raf) cancelAnimationFrame(S.raf); clearTimeout(S.narrTimer); App.Audio.stopHeart();
+    placeFinal();
+    setHeader('Corrida encerrada!', false);
+    const v = S.cavalos[S.sim.order[0]];
+    Log.info('Race','corrida encerrada', { vencedor:v.nome, top3:S.sim.order.slice(0,3).map(i=>S.cavalos[i].nome), close:S.sim.close });
+    if (S.sim.close) { App.PhotoFinish.show(() => afterRace()); }
+    else { App.Narration.narrar(App.Narration.fimLine(v.nome), true, true); App.Audio.crowdSet(CFG.crowd.end); App.Timing.seq(T.endDelay, () => afterRace()); }
+  }
+
+  // Pós-corrida: torneio avança a bateria; sequência de prêmios registra quem levou o prêmio
+  // da corrida; senão, vai direto ao resultado.
+  function afterRace(){
+    if (S.mode === 'tournament') {
+      const w = S.cavalos[S.sim.order[0]].nome;
+      S.tour.advancing.push(w);
+      S.tour.bracket[S.tour.bracket.length-1].heats[S.tour.heatIdx].winner = w;
+      if (S.tour.isFinal) { App.Result.reveal(); } else { App.Tournament.showHeatResult(w); }
+    } else {
+      if (S.seq) { const w = S.cavalos[S.sim.order[0]]; S.seq.awarded.push({ name:w.nome, emoji:w.emoji, prize:S.seq.prizes[S.seq.idx] || '' }); }
+      else markWinner(S.cavalos[S.sim.order[0]].nome); // "não repetir": registra o ganhador (no-op se off)
+      App.Result.reveal();
+    }
+  }
+
+  // ---- Prêmios / modo de entrega ----
+  // Lê os prêmios preenchidos (1º/2º/3º), sem vazios.
+  function currentPrizes(){ return ['prizeInp','prizeInp2','prizeInp3'].map(id => { const el = D.id(id); return el ? el.value.trim().slice(0,60) : ''; }).filter(Boolean); }
+  // Modo de entrega escolhido no rádio (fallback p/ o espelho em S — útil sem DOM/nos testes).
+  function prizeModeValue(){ try { const r = document.querySelector('input[name="prizeMode"]:checked'); if (r && r.value) return r.value; } catch (e) {} return S.prizeMode || 'podium'; }
+  // Sequencial vale só fora do torneio, modo "uma corrida por prêmio" e com 2+ prêmios.
+  function seqWanted(){ return S.mode !== 'tournament' && prizeModeValue() === 'sequential' && currentPrizes().length >= 2; }
+  // Semente da k-ésima corrida (0-based) derivada da semente-mestra — sequência inteira
+  // reprodutível por UMA semente (mesmo padrão do torneio, que deriva as baterias do mestre).
+  function seqSeed(base, k){ const m = App.RNG.mulberry32(base >>> 0); let s = 0; for (let i = 0; i <= k; i++) s = (m() * 4294967296) >>> 0; return s; }
+  function seqLabel(){ return S.seq ? ('🏅 Prêmio ' + (S.seq.idx + 1) + ' de ' + S.seq.prizes.length) : ''; }
+  // Inicia uma sequência de prêmios reprodutível a partir de uma semente-mestra.
+  function startSeq(seed){
+    const base = seed >>> 0;
+    S.seq = { base, original: S.participantes.slice(), teamOf: Object.assign({}, S.teamOf), prizes: currentPrizes(), idx: 0, awarded: [] };
+    S.lastSeed = base;
+    Log.info('Race','sequência de prêmios iniciada', { base, premios:S.seq.prizes.length, participantes:S.seq.original.length });
+    run(S.participantes, seqSeed(base, 0), seqLabel());
+  }
+  // Avança a sequência: tira o vencedor e disputa o próximo prêmio (semente derivada do mestre).
+  function seqNext(){
+    const w = S.cavalos[S.sim.order[0]].nome;
+    const i = S.participantes.indexOf(w); if (i >= 0) { S.participantes.splice(i, 1); delete S.teamOf[w]; }
+    S.seq.idx++;
+    if (S.seq.idx >= S.seq.prizes.length) { App.Roster.msg('🏁 Todos os ' + S.seq.prizes.length + ' prêmios entregues!', true); return; }
+    if (S.participantes.length < 2) { App.Roster.msg('🏁 Acabaram os participantes — ' + S.seq.awarded.length + ' de ' + S.seq.prizes.length + ' prêmios entregues.', true); S.seq = null; App.Screens.show('screen-cadastro'); App.Teams.renderChips(); App.Roster.render(); return; }
+    S.lastSeed = S.seq.base; run(S.participantes, seqSeed(S.seq.base, S.seq.idx), seqLabel());
+  }
+
+  // ---- Controles (chamados pelo UI) ----
+  const teamLabel = () => S.mode === 'teams' ? '👥 Corrida por equipes' : '';
+  // "Não repetir ganhadores": exclui quem já ganhou (lista persistida). Vale p/ corrida única/equipes
+  // (não p/ torneio nem sequência de prêmios). O link compartilhado reproduz exatamente o que correu.
+  function excludedNames(){ return App.Store.winnersLoad(); }
+  function effectivePool(){ if (!S.noRepeat) return S.participantes.slice(); const ex = new Set(excludedNames().map(n => n.toLowerCase())); return S.participantes.filter(n => !ex.has(n.toLowerCase())); }
+  function markWinner(name){ if (!S.noRepeat || !name) return; const arr = excludedNames(); if (!arr.some(n => n.toLowerCase() === name.toLowerCase())) { arr.push(name); App.Store.winnersSave(arr); Log.info('Race','ganhador registrado (não repetir)', { name, total:arr.length }); } updateNoRepeatInfo(); }
+  function updateNoRepeatInfo(){ const el = D.id('noRepeatInfo'); if (!el) return; const n = excludedNames().length; el.innerHTML = n ? ` — ${n} já ganhou(aram) <button type="button" class="seed-copy" data-action="limparGanhadores" style="font-size:11px;padding:0 6px">limpar</button>` : ''; }
+  function setNoRepeat(on){ S.noRepeat = !!on; try { App.Store.pref('noRepeat', S.noRepeat); } catch (e) {} updateNoRepeatInfo(); Log.info('Race','não repetir ' + (S.noRepeat ? 'ON' : 'OFF')); }
+  function clearWinners(){ App.Store.winnersSave([]); updateNoRepeatInfo(); App.Roster.msg('Ganhadores anteriores limpos.', true); Log.info('Race','ganhadores limpos'); }
+  function initNoRepeat(){ S.noRepeat = !!App.Store.pref('noRepeat'); const nc = D.id('noRepeatChk'); if (nc) nc.checked = S.noRepeat; updateNoRepeatInfo(); }
+  // Inicia o sorteio: torneio, sequência de prêmios reprodutível, ou corrida única (pódio).
+  function startDraw(forceRandom){
+    S.eventName = (D.id('eventInp') ? D.id('eventInp').value.trim().slice(0,60) : '') || '';
+    S.drawn = [];
+    if (S.mode === 'tournament') { S.seq = null; App.Tournament.start(chosenSeed(forceRandom)); return; }
+    if (seqWanted()) { startSeq(chosenSeed(forceRandom)); return; }
+    S.seq = null; S.lastSeed = chosenSeed(forceRandom);
+    const pool = effectivePool();
+    if (pool.length < 2) { App.Roster.msg('🚫 Todos já ganharam — limpe os ganhadores nas Opções p/ sortear de novo.', false); return; }
+    S.lastPool = pool; run(pool, S.lastSeed, teamLabel());
+  }
+  function iniciar(){ startDraw(false); }   // respeita a semente do campo (se houver)
+  function novamente(){ startDraw(true); }   // força sorteio novo (semente aleatória)
+  // "Tirar vencedor": numa sequência de prêmios, disputa o próximo prêmio (reprodutível);
+  // fora dela, é o sorteio sequencial LIVRE (remove o vencedor e re-sorteia aleatório).
+  function proximo(){
+    if (!S.sim || !S.cavalos.length) return;
+    if (S.seq) { seqNext(); return; }
+    const w = S.cavalos[S.sim.order[0]].nome;
+    S.drawn.push(w);
+    const i = S.participantes.indexOf(w); if (i >= 0) { S.participantes.splice(i, 1); delete S.teamOf[w]; }
+    if (S.participantes.length < 2) { App.Roster.msg('🏁 Sequência encerrada — ' + S.drawn.length + ' sorteado(s).', true); App.Screens.show('screen-cadastro'); App.Teams.renderChips(); App.Roster.render(); return; }
+    S.lastSeed = chosenSeed(true); run(S.participantes, S.lastSeed, teamLabel());
+  }
+  function reprisar(){
+    if (S.seq) { S.participantes = S.seq.original.slice(); S.teamOf = Object.assign({}, S.seq.teamOf); startSeq(S.seq.base); return; }
+    if (S.lastSeed == null) return;
+    if (S.mode === 'tournament') { App.Tournament.start(S.lastSeed); } else { run(S.lastPool || S.participantes, S.lastSeed, S.mode==='teams'?'👥 Corrida por equipes':''); }
+  }
+  // Volta ao cadastro a partir do resultado.
+  function editar(){ clearAll(); S.tour = null; S.seq = null; App.Screens.show('screen-cadastro'); Log.info('Race','voltou ao cadastro'); }
+
+  return { run, clearAll, setHeader, hideCD, skip, iniciar, novamente, reprisar, proximo, editar, seqSeed, prizeModeValue, seqWanted, setNoRepeat, clearWinners, initNoRepeat };
+})();
+
+/* ===================== Tournament — baterias e chaveamento ===================== */
+/* Embaralha (determinístico) -> baterias (MAXHEAT) -> vencedores avançam ->
+   repete até sobrar uma bateria (a Grande Final).                           */
+App.Tournament = (function(){
+  // Distribui os nomes em k baterias (round-robin), no máx. MAXHEAT por bateria.
+  function makeHeats(arr, maxSize){ const k = Math.max(1, Math.ceil(arr.length/maxSize)); const h = Array.from({length:k}, () => []); arr.forEach((x,i) => h[i%k].push(x)); return h; }
+  function start(seed){
+    App.Audio.ensure(); App.Race.clearAll();
+    S.tourBaseSeed = seed; S.lastSeed = seed; S.tourMaster = App.RNG.mulberry32(seed >>> 0);
+    const contest = App.RNG.shuffle(S.participantes, S.tourMaster);
+    S.tour = { round:1, bracket:[], heats:[], heatIdx:0, advancing:[], isFinalRound:false, isFinal:false, contest };
+    Log.info('Tournament','torneio iniciado', { seed, participantes:contest.length });
+    beginRound();
+  }
+  function roundName(){ if (S.tour.isFinalRound) return 'Final'; if (S.tour.round === 1) return 'Eliminatórias'; return 'Rodada ' + S.tour.round; }
+  function beginRound(){
+    S.tour.heats = makeHeats(S.tour.contest, CFG.MAXHEAT); S.tour.heatIdx = 0; S.tour.advancing = []; S.tour.isFinalRound = (S.tour.heats.length === 1);
+    S.tour.bracket.push({ name:roundName(), isFinal:S.tour.isFinalRound, heats:S.tour.heats.map(h => ({ names:h.slice(), winner:null })) });
+    Log.info('Tournament','rodada', { rodada:roundName(), baterias:S.tour.heats.length, final:S.tour.isFinalRound });
+    runHeatRace();
+  }
+  // Semente de cada bateria derivada do RNG-mestre (mantém o torneio reprodutível).
+  function nextHeatSeed(){ return (S.tourMaster()*4294967296) >>> 0; }
+  function runHeatRace(){
+    S.tour.isFinal = S.tour.isFinalRound;
+    const names = S.tour.heats[S.tour.heatIdx], seed = nextHeatSeed();
+    const label = S.tour.isFinalRound ? '🏆 Torneio · Grande Final' : `🏆 Torneio · ${roundName()} · Eliminatória ${S.tour.heatIdx+1} de ${S.tour.heats.length}`;
+    App.Race.run(names, seed, label);
+  }
+  // Tela entre baterias (mostra o vencedor que avança + chaveamento).
+  function showHeatResult(w){
+    App.Screens.show('screen-heat');
+    const isLast = S.tour.heatIdx === S.tour.heats.length-1;
+    D.setText('heatTitle', `${roundName()} · Eliminatória ${S.tour.heatIdx+1}/${S.tour.heats.length} concluída`);
+    const c = S.cavalos[S.sim.order[0]];
+    D.setHTML('heatWinner', `<div class="podio"><div class="vcard small"><div class="ve">${c.emoji}</div><div class="vn">${U.esc(w)}</div><div class="vl">avança de fase</div></div></div>`);
+    D.setHTML('heatBracket', bracketHtml());
+    let nextLabel = 'Próxima eliminatória';
+    if (isLast) { const next = makeHeats(S.tour.advancing, CFG.MAXHEAT); nextLabel = next.length === 1 ? '🏆 Ir para a Grande Final' : 'Próxima rodada'; }
+    D.setText('heatNext', nextLabel);
+    App.View.announce('Eliminatória ' + (S.tour.heatIdx+1) + ' concluída. ' + w + ' avança.');
+    Log.info('Tournament','bateria concluída', { vencedor:w, bateria:S.tour.heatIdx+1, de:S.tour.heats.length });
+    App.Audio.applause(1.4); App.Audio.say(w + ' avança para a próxima fase!', true);
+    App.Audio.crowdSet(CFG.crowd.zero); App.Timing.seq(CFG.timing.heatStopDelay, () => App.Audio.crowdStop());
+  }
+  // Avança para a próxima bateria, ou inicia a próxima rodada.
+  function continuar(){
+    S.tour.heatIdx++;
+    if (S.tour.heatIdx < S.tour.heats.length) { runHeatRace(); }
+    else { S.tour.contest = S.tour.advancing.slice(); S.tour.round++; beginRound(); }
+  }
+  // HTML do chaveamento (rodadas, baterias e vencedores).
+  function bracketHtml(){
+    if (!S.tour || !S.tour.bracket.length) return '';
+    return '<div class="bracket">' + S.tour.bracket.map(r => `<div class="bk-round"><div class="rh">${U.esc(r.name)}</div>${r.heats.map((h,i) => { const lbl = r.isFinal ? 'Final' : ('Eliminatória ' + (i+1)); return `<div class="bk-heat">${lbl}: ${h.names.map(U.esc).join(', ')}${h.winner ? ` → <span class="win">${U.esc(h.winner)} ✓</span>` : ' → <em>aguardando</em>'}</div>`; }).join('')}</div>`).join('') + '</div>';
+  }
+  return { makeHeats, start, showHeatResult, continuar, bracketHtml };
+})();
+
+/* ===================== QR — gerador de QR Code (vanilla, sem dependências) ===================== */
+/* Implementação PRÓPRIA (byte mode, nível L) para o QR do link compartilhável.
+   Roda 100% no navegador — nenhum dado sai daqui. Validado contra as tabelas do
+   padrão ISO/IEC 18004 (format info, capacidades) e por round-trip. make()/draw(). */
+App.QR = (function(){
+  // GF(256), primitivo 0x11D
+  const EXP = new Array(512), LOG = new Array(256);
+  (() => { let x = 1; for (let i = 0; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11D; } for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255]; })();
+  const gmul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
+  function rsGen(deg) { let g = [1]; for (let i = 0; i < deg; i++) { const n = new Array(g.length + 1).fill(0); for (let j = 0; j < g.length; j++) { n[j] ^= g[j]; n[j + 1] ^= gmul(g[j], EXP[i]); } g = n; } return g; }
+  function rsEC(data, ecLen) { const g = rsGen(ecLen); const res = data.concat(new Array(ecLen).fill(0)); for (let i = 0; i < data.length; i++) { const c = res[i]; if (c) for (let j = 0; j < g.length; j++) res[i + j] ^= gmul(g[j], c); } return res.slice(data.length); }
+  // posições dos padrões de alinhamento; nível L: [ecPerBlock, numBlocks]
+  const ALIGN = [[],[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]];
+  const ECL = [null,[7,1],[10,1],[15,1],[20,1],[26,1],[18,2],[20,2],[24,2],[30,2],[18,4],[20,4],[24,4],[26,4],[30,4],[22,6],[24,6],[28,6],[30,6],[28,7],[28,8],[28,8],[28,9],[30,9],[30,10],[26,12],[28,12],[30,12],[30,13],[30,14],[30,15],[30,16],[30,17],[30,18],[30,19],[30,19],[30,20],[30,21],[30,22],[30,24],[30,25]];
+  const size = v => 17 + 4 * v;
+  function reservedMap(v) {
+    const n = size(v), R = Array.from({ length: n }, () => new Array(n).fill(false)), set = (r, c) => { if (r >= 0 && r < n && c >= 0 && c < n) R[r][c] = true; };
+    for (const [pr, pc] of [[0, 0], [0, n - 7], [n - 7, 0]]) for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) set(pr + r, pc + c);
+    for (let i = 0; i < n; i++) { set(6, i); set(i, 6); }
+    const a = ALIGN[v];
+    for (const r of a) for (const c of a) { if ((r <= 8 && c <= 8) || (r <= 8 && c >= n - 9) || (r >= n - 9 && c <= 8)) continue; for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) set(r + dr, c + dc); }
+    for (let i = 0; i < 9; i++) { set(8, i); set(i, 8); }
+    for (let i = 0; i < 8; i++) { set(8, n - 1 - i); set(n - 1 - i, 8); }
+    if (v >= 7) for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) { set(i, n - 11 + j); set(n - 11 + j, i); }
+    return R;
+  }
+  function totalCodewords(v) { const n = size(v), R = reservedMap(v); let free = 0; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (!R[r][c]) free++; return Math.floor(free / 8); }
+  function dataCwCount(v) { const [ec, nb] = ECL[v]; return totalCodewords(v) - ec * nb; }
+  function chooseVersion(len) { for (let v = 1; v <= 40; v++) { const cb = v <= 9 ? 8 : 16; if (dataCwCount(v) * 8 >= 4 + cb + 8 * len) return v; } return -1; }
+  function drawFunction(grid, v) {
+    const n = size(v);
+    for (const [pr, pc] of [[0, 0], [0, n - 7], [n - 7, 0]]) for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) { const rr = pr + r, cc = pc + c; if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue; const inF = r >= 0 && r <= 6 && c >= 0 && c <= 6; grid[rr][cc] = inF ? ((r === 0 || r === 6 || c === 0 || c === 6) || (r >= 2 && r <= 4 && c >= 2 && c <= 4)) : false; }
+    for (let i = 8; i < n - 8; i++) { grid[6][i] = (i % 2 === 0); grid[i][6] = (i % 2 === 0); }
+    const a = ALIGN[v];
+    for (const r of a) for (const c of a) { if ((r <= 8 && c <= 8) || (r <= 8 && c >= n - 9) || (r >= n - 9 && c <= 8)) continue; for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid[r + dr][c + dc] = Math.max(Math.abs(dr), Math.abs(dc)) !== 1; }
+  }
+  function fmtValue(mask) { const data = (1 << 3) | mask; let rem = data; for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >> 9) * 0x537); return ((data << 10) | rem) ^ 0x5412; }
+  function verValue(v) { let rem = v; for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >> 11) * 0x1F25); return (v << 12) | rem; }
+  const bit = (x, i) => (x >> i) & 1;
+  function drawFormat(grid, v, mask) {
+    const n = size(v), f = fmtValue(mask);
+    for (let i = 0; i <= 5; i++) grid[i][8] = !!bit(f, i);
+    grid[7][8] = !!bit(f, 6); grid[8][8] = !!bit(f, 7); grid[8][7] = !!bit(f, 8);
+    for (let i = 9; i < 15; i++) grid[8][14 - i] = !!bit(f, i);
+    for (let i = 0; i < 8; i++) grid[8][n - 1 - i] = !!bit(f, i);
+    for (let i = 8; i < 15; i++) grid[n - 15 + i][8] = !!bit(f, i);
+    grid[n - 8][8] = true;
+  }
+  function drawVersion(grid, v) { const n = size(v), vv = verValue(v); for (let i = 0; i < 18; i++) { const b = !!bit(vv, i), a = n - 11 + i % 3, d = Math.floor(i / 3); grid[d][a] = b; grid[a][d] = b; } }
+  function buildData(bytes, v) {
+    const dataCw = dataCwCount(v), cb = v <= 9 ? 8 : 16, bits = [], push = (val, n) => { for (let i = n - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+    push(0b0100, 4); push(bytes.length, cb); for (const b of bytes) push(b, 8);
+    const cap = dataCw * 8;
+    for (let i = 0; i < 4 && bits.length < cap; i++) bits.push(0);
+    while (bits.length % 8) bits.push(0);
+    const cws = []; for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; cws.push(b); }
+    const pad = [0xEC, 0x11]; let k = 0; while (cws.length < dataCw) cws.push(pad[k++ % 2]);
+    return cws;
+  }
+  function interleave(dataCw, v) {
+    const [ecLen, nb] = ECL[v], total = dataCw.length, short = Math.floor(total / nb), longCount = total % nb, shortCount = nb - longCount, blocks = [], ecs = []; let p = 0;
+    for (let i = 0; i < nb; i++) { const len = short + (i >= shortCount ? 1 : 0), blk = dataCw.slice(p, p + len); p += len; blocks.push(blk); ecs.push(rsEC(blk, ecLen)); }
+    const out = [], maxD = Math.max.apply(null, blocks.map(b => b.length));
+    for (let i = 0; i < maxD; i++) for (const b of blocks) if (i < b.length) out.push(b[i]);
+    for (let i = 0; i < ecLen; i++) for (const e of ecs) out.push(e[i]);
+    return out;
+  }
+  const MASKS = [(r, c) => (r + c) % 2 === 0, (r, c) => r % 2 === 0, (r, c) => c % 3 === 0, (r, c) => (r + c) % 3 === 0, (r, c) => (((r >> 1) + Math.floor(c / 3)) % 2) === 0, (r, c) => ((r * c) % 2 + (r * c) % 3) === 0, (r, c) => (((r * c) % 2 + (r * c) % 3) % 2) === 0, (r, c) => (((r + c) % 2 + (r * c) % 3) % 2) === 0];
+  function dataPositions(v) { const n = size(v), R = reservedMap(v), pos = []; let up = true; for (let col = n - 1; col > 0; col -= 2) { if (col === 6) col--; for (let i = 0; i < n; i++) { const row = up ? n - 1 - i : i; for (let cc = 0; cc < 2; cc++) { const c = col - cc; if (!R[row][c]) pos.push([row, c]); } } up = !up; } return pos; }
+  function penalty(g, n) {
+    let p = 0;
+    for (let r = 0; r < n; r++) { let run = 1; for (let c = 1; c < n; c++) { if (g[r][c] === g[r][c - 1]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
+    for (let c = 0; c < n; c++) { let run = 1; for (let r = 1; r < n; r++) { if (g[r][c] === g[r - 1][c]) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } }
+    for (let r = 0; r < n - 1; r++) for (let c = 0; c < n - 1; c++) { const x = g[r][c]; if (x === g[r][c + 1] && x === g[r + 1][c] && x === g[r + 1][c + 1]) p += 3; }
+    const P1 = [true, false, true, true, true, false, true, false, false, false, false], P2 = [false, false, false, false, true, false, true, true, true, false, true];
+    for (let r = 0; r < n; r++) for (let c = 0; c <= n - 11; c++) { let a = true, b = true; for (let k = 0; k < 11; k++) { if (g[r][c + k] !== P1[k]) a = false; if (g[r][c + k] !== P2[k]) b = false; } if (a || b) p += 40; }
+    for (let c = 0; c < n; c++) for (let r = 0; r <= n - 11; r++) { let a = true, b = true; for (let k = 0; k < 11; k++) { if (g[r + k][c] !== P1[k]) a = false; if (g[r + k][c] !== P2[k]) b = false; } if (a || b) p += 40; }
+    let dark = 0; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (g[r][c]) dark++;
+    p += Math.floor(Math.abs(dark * 100 / (n * n) - 50) / 5) * 10;
+    return p;
+  }
+  // Gera a matriz do QR (true = módulo escuro). Lança se o texto não couber (até v40).
+  function make(text) {
+    const bytes = Array.from(new TextEncoder().encode(text)), v = chooseVersion(bytes.length);
+    if (v < 0) throw new Error('texto grande demais para QR (' + bytes.length + ' bytes)');
+    const finalCw = interleave(buildData(bytes, v), v), n = size(v), pos = dataPositions(v), bits = [];
+    for (const cw of finalCw) for (let i = 7; i >= 0; i--) bits.push((cw >> i) & 1);
+    let best = null, bestPen = Infinity, bestMask = 0;
+    for (let mask = 0; mask < 8; mask++) {
+      const g = Array.from({ length: n }, () => new Array(n).fill(false));
+      drawFunction(g, v);
+      for (let k = 0; k < pos.length; k++) { const [r, c] = pos[k]; let b = k < bits.length ? bits[k] : 0; if (MASKS[mask](r, c)) b ^= 1; g[r][c] = !!b; }
+      drawFormat(g, v, mask); if (v >= 7) drawVersion(g, v);
+      const pen = penalty(g, n);
+      if (pen < bestPen) { bestPen = pen; best = g; bestMask = mask; }
+    }
+    return { size: n, modules: best, version: v, mask: bestMask };
+  }
+  // Desenha o QR de `text` num <canvas> (com quiet zone). Retorna {size, version}.
+  function draw(text, canvas) {
+    const q = make(text), n = q.size, quiet = 4, total = n + quiet * 2, s = Math.max(3, Math.floor(560 / total)), px = total * s;
+    canvas.width = px; canvas.height = px;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px); ctx.fillStyle = '#000';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.modules[r][c]) ctx.fillRect((c + quiet) * s, (r + quiet) * s, s, s);
+    return { size: n, version: q.version };
+  }
+  // Gera um SVG vetorial (fundo branco) do QR de `text` — para baixar/imprimir sem perder nitidez.
+  function svg(text) {
+    const q = make(text), n = q.size, quiet = 4, total = n + quiet * 2; let rects = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.modules[r][c]) rects += `<rect x="${c + quiet}" y="${r + quiet}" width="1" height="1"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#fff"/><g fill="#000">${rects}</g></svg>`;
+  }
+  return { make, draw, svg };
+})();
+
+/* ===================== Result — revelação e resultado ===================== */
+App.Result = (function(){
+  // Revelação dramática (rufar de tambor) e, depois, o conteúdo completo + festa.
+  function reveal(){
+    App.Screens.show('res'); build();
+    const v = S.cavalos[S.sim.order[0]];
+    App.View.announce((S.mode === 'tournament' ? 'Campeão do torneio' : 'Vencedor') + ': ' + v.nome + '.');
+    App.History.record(); // guarda este sorteio no histórico
+    if (App.View.reducedMotion()) { // sem suspense/confete: mostra o resultado direto
+      D.id('reveal').style.display = 'none'; D.id('resContent').style.display = 'block';
+      App.Audio.winnerFanfare(); App.Audio.applause(2);
+      Log.info('Result','revelação (movimento reduzido)', { vencedor:v.nome, mode:S.mode });
+      return;
+    }
+    D.id('reveal').style.display = 'block'; D.id('resContent').style.display = 'none';
+    App.Audio.crowdSet(CFG.crowd.revealLow); App.Audio.drumroll(2.4); App.Audio.say('E o grande vencedor é...', true);
+    Log.info('Result','revelação iniciada', { vencedor:v.nome, mode:S.mode });
+    App.Timing.seq(CFG.timing.revealDelay, () => {
+      D.id('reveal').style.display = 'none'; D.id('resContent').style.display = 'block';
+      App.Audio.cymbal(); App.Audio.winnerFanfare(); App.Audio.applause(3); App.Audio.crowdSet(CFG.crowd.revealHigh); App.FX.celebration();
+      const v = S.cavalos[S.sim.order[0]]; App.Audio.say('O vencedor é ' + v.nome + '!', true);
+      App.Timing.seq(CFG.timing.revealCelebStop, () => { App.Audio.crowdSet(CFG.crowd.zero); App.Audio.crowdStop(); });
+    });
+  }
+  // Monta o conteúdo do resultado (pódio, equipes, chaveamento, stats, lista, semente).
+  function build(){
+    const v = S.cavalos[S.sim.order[0]], isTour = (S.mode === 'tournament');
+    D.setText('resTitle', S.eventName ? ('🏆 ' + S.eventName) : (isTour ? '🏆 Campeão do torneio' : '🏆 Resultado do sorteio'));
+    const seq = S.seq;
+    const seqAllDone = seq && (seq.idx + 1 >= seq.prizes.length);          // todos os prêmios entregues
+    const seqHasNext = seq && !seqAllDone && (S.participantes.length >= 3); // dá p/ disputar o próximo
+    D.setText('resSub', seq ? `Sorteio sequencial — prêmio ${seq.idx+1} de ${seq.prizes.length}`
+                            : (isTour ? 'Grande final do torneio' : `Corrida com ${S.cavalos.length} participantes`));
+    // Prêmio de cada colocação: na sequência só o vencedor da corrida leva (o prêmio atual);
+    // no pódio, 1º/2º/3º levam os prêmios posicionais. (Sem prêmios: ninguém.)
+    const prizeForRank = (r) => seq ? (r === 0 ? (seq.prizes[seq.idx] || '') : '') : ((S.prizes || [])[r] || '');
+    // prizeline = só a "linha do tempo" do sequencial; no pódio o prêmio vai no card.
+    if (seq) {
+      const tail = seqAllDone ? ' — todos entregues 🏁' : (seqHasNext ? '' : ' — sem participantes para o próximo');
+      const list = seq.awarded.map((x, i) => { const cur = (i === seq.awarded.length - 1); return `${cur?'🏅':'✅'} <b>${U.esc(x.name)}</b> ${cur?'leva':'levou'}: <b>${U.esc(x.prize)}</b>`; }).join('<br>');
+      D.setHTML('prizeline', `<div class="seqhead">Prêmio ${seq.idx+1} de ${seq.prizes.length}${tail}</div>${list}`);
+      D.setText('drawnLine', '');
+    } else {
+      D.setHTML('prizeline', '');
+      D.setText('drawnLine', S.drawn.length ? ('🏅 Já sorteados nesta rodada: ' + S.drawn.join(', ')) : '');
+    }
+    // "Próximo ganhador" / "Disputar o Nº prêmio": só onde faz sentido — no pódio COM prêmios
+    // definidos, não aparece (você acabou de premiar 1º/2º/3º).
+    const bp = D.id('btnProximo');
+    if (bp) {
+      const hasPodiumPrizes = !seq && (S.prizes || []).filter(Boolean).length > 0;
+      bp.style.display = (seq ? seqHasNext : (!isTour && !hasPodiumPrizes && S.participantes.length >= 3)) ? '' : 'none';
+      bp.textContent = seq ? ('🏅 Disputar o ' + (seq.idx + 2) + 'º prêmio') : '🏅 Próximo ganhador';
+    }
+    // Pódio: vencedor em destaque (ouro) com prêmio e equipe no card; 2º/3º em mini-pódio.
+    const teamTag = (c) => (S.mode === 'teams' && c.team) ? `<div class="vteam"><i style="background:${App.Teams.color(c.team)}"></i>${U.esc(c.team)}</div>` : '';
+    const winPrize = prizeForRank(0);
+    const winHtml = `<div class="vcard win"><div class="vmedal">🥇</div><div class="ve">${v.emoji}</div><div class="vn">${U.esc(v.nome)}</div><div class="vl">${isTour?'Campeão':'Vencedor'}</div>${teamTag(v)}${winPrize?`<div class="vprize">🎁 leva <b>${U.esc(winPrize)}</b></div>`:''}</div>`;
+    const others = S.sim.order.slice(1, 3).map((idx, i) => {
+      const c = S.cavalos[idx], pr = prizeForRank(i + 1);
+      return `<div class="podstep"><div class="pmedal">${['🥈','🥉'][i]}</div><div class="pe">${c.emoji}</div><div class="pn">${U.esc(c.nome)}</div>${pr?`<div class="pprize">🎁 ${U.esc(pr)}</div>`:''}</div>`;
+    }).join('');
+    D.setHTML('podio', winHtml + (others ? `<div class="outros">${others}</div>` : ''));
+    D.setHTML('teamStandings', (S.mode === 'teams') ? App.Teams.standingsHtml() : '');
+    D.setHTML('bracketBox', isTour ? ('<div class="bk-round" style="max-width:560px;margin:0 auto"><div class="rh" style="text-align:center">Caminho até o título</div></div>' + App.Tournament.bracketHtml()) : '');
+    // Estatísticas só com gente suficiente — uma final de 2 não tem "viradas"/"ultrapassagens".
+    const statCards = [];
+    if (S.cavalos.length >= 4) {
+      const ot = U.argmax(S.sim.gain), su = U.argmax(S.sim.surges);
+      statCards.push(`<div class="stat"><div class="sv">${S.sim.leadChanges}</div><div class="sl">viradas de liderança</div></div>`);
+      statCards.push(`<div class="stat"><div class="sv">${U.esc(S.cavalos[ot].nome)}</div><div class="sl">mais ultrapassagens</div></div>`);
+      statCards.push(`<div class="stat"><div class="sv">${U.esc(S.cavalos[su].nome)}</div><div class="sl">mais arrancadas</div></div>`);
+    }
+    if (S.sim.close) statCards.push(`<div class="stat"><div class="sv">📸</div><div class="sl">photo finish</div></div>`);
+    D.setHTML('stats', statCards.join(''));
+    // Classificação completa: colapsável (top 3 já estão no pódio) — encurta a tela, ótimo no mobile.
+    const rows = S.sim.order.map((idx, p) => { const c = S.cavalos[idx]; return `<div class="row"><span class="p">${p+1}º</span><span>${c.emoji}</span><span>${U.esc(c.nome)}</span></div>`; }).join('');
+    D.setHTML('full', `<details class="fulldet"><summary>📋 ${isTour ? 'Classificação da final' : 'Classificação completa'} (${S.sim.order.length})</summary><div class="fulllist">${rows}</div></details>`);
+    // Compartilhar (plateia) em destaque; semente como nota discreta de "sorteio justo".
+    const seedShown = isTour ? S.tourBaseSeed : (seq ? seq.base : S.sim.seed);
+    // No mobile, "Compartilhar" abre a folha nativa (Web Share); sem suporte (desktop), mantém Copiar/QR.
+    const shareBtn = navigator.share ? `<button class="btn btn-sm btn-go" data-action="compartilhar" data-arg="${seedShown}">📤 Compartilhar</button> ` : '';
+    const shareLbl = navigator.share ? '' : '<span class="sharelbl">Compartilhar:</span> ';
+    D.setHTML('seedline', `<div class="sharebar">${shareLbl}${shareBtn}<button class="btn btn-sm" data-action="copiarLink" data-arg="${seedShown}">🔗 Copiar link</button> <button class="btn btn-sm" data-action="mostrarQR" data-arg="${seedShown}">📱 QR Code</button></div><div class="seednote">⚖️ Sorteio justo · semente <button class="seed-copy" data-action="copiarSemente" data-arg="${seedShown}" title="A mesma semente reproduz exatamente este sorteio — prova de que não há truque. Reproduza pelo link ou em &quot;Opções&quot;.">${seedShown}</button></div>`);
+    const lp = D.id('linkPreview'); if (lp) { lp.style.display = 'none'; lp.innerHTML = ''; } // limpa preview do resultado anterior
+    // Pré-computa link e imagem p/ o compartilhar SÍNCRONO (preserva o gesto no iOS). Pronto antes do toque.
+    shareData = { seed: seedShown, url: null };
+    if (navigator.share) buildShareUrl(seedShown).then(u => { if (shareData.seed === seedShown) shareData.url = u; }).catch(() => {});
+    D.setText('btnNova', isTour ? '🎲 Novo torneio' : '🎲 Nova corrida');
+  }
+  // Copia a semente para a área de transferência.
+  function copySeed(s){ try { navigator.clipboard.writeText('' + s); App.Roster.msg('Semente copiada!', true); Log.info('Result','semente copiada', { seed:s }); } catch (e) { App.Roster.msg('Semente: ' + s, true); Log.warn('Result','clipboard indisponível', e); } }
+  function toggleSave(e){ if (e) e.stopPropagation(); const m = D.id('saveMenu'); const opening = !m.classList.contains('open'); m.classList.toggle('open'); const h = D.id('pdfHint'); if (h && opening) h.style.display = window.jspdf ? 'none' : 'block'; }
+  function closeSave(){ const m = D.id('saveMenu'); if (m) m.classList.remove('open'); }
+  // Monta a URL que reproduz este sorteio (modo + participantes + prêmio + semente).
+  // Os dados vão no FRAGMENTO (#) — que NÃO é enviado no GET (sem limite de servidor),
+  // comprimidos quando possível (#d=…) p/ encurtar; senão, fragmento cru (#…).
+  // Numa sequência de prêmios, codifica a LISTA ORIGINAL + a semente-mestra + pm=seq —
+  // o link reproduz a sequência INTEIRA (cada corrida/vencedor), o "sorteio justo".
+  async function buildShareUrl(seed){
+    const base = location.href.split(/[?#]/)[0];
+    const seq = S.seq;
+    const p = new URLSearchParams();
+    p.set('modo', S.mode); p.set('seed', seed); if (S.eventName) p.set('ev', S.eventName);
+    if (seq) p.set('pm', 'seq');
+    const prizes = seq ? seq.prizes : (S.prizes && S.prizes.length ? S.prizes : [S.prize]);
+    prizes.filter(Boolean).forEach(pr => p.append('p', pr));
+    const names = seq ? seq.original : (S.cavalos && S.cavalos.length ? S.cavalos.map(c => c.nome) : S.participantes);
+    const teamOf = seq ? seq.teamOf : S.teamOf;
+    names.forEach(n => { p.append('n', n); if (S.mode === 'teams') p.append('t', teamOf[n] || ''); });
+    const q = p.toString();
+    if (U.supportsCompression()) { try { return base + '#d=' + await U.deflateB64url(q); } catch (e) { Log.warn('Result','compressão falhou; link sem compressão', e); } }
+    return base + '#' + q;
+  }
+  // Copia o LINK compartilhável (abre já com tudo preenchido, pronto p/ Iniciar).
+  // No sucesso: só o toast (com o tamanho). Se o clipboard estiver bloqueado, aí sim
+  // mostra o preview (campo selecionável) como fallback p/ copiar à mão.
+  async function copyLink(seed){
+    const url = await buildShareUrl(seed);
+    try {
+      await navigator.clipboard.writeText(url);
+      const box = D.id('linkPreview'); if (box) box.style.display = 'none';
+      App.Roster.msg(`Link copiado! (${url.length} caracteres${url.includes('#d=') ? ', comprimido' : ''})`, true);
+      Log.info('Result','link copiado', { len:url.length, comprimido:url.includes('#d=') });
+    } catch (e) {
+      showLinkPreview(url);
+      App.Roster.msg('Não consegui copiar sozinho — selecione o link abaixo 👇', true);
+      Log.warn('Result','clipboard indisponível, preview exibido', e);
+    }
+  }
+  // Compartilhamento nativo (Web Share API) — abre a folha do sistema no mobile, enviando o
+  // LINK (que reproduz o sorteio e gera prévia/thumbnail no app de mensagem) + o texto do vencedor.
+  // IMPORTANTE: navigator.share precisa ser chamado SÍNCRONO dentro do toque (sem await antes),
+  // senão o iOS/Safari perde o "gesto do usuário" e rejeita. Por isso a URL é pré-computada em build().
+  // Cancelar é silencioso; sem suporte ou erro real, cai para "Copiar link".
+  function share(seed){
+    const v = S.cavalos[S.sim.order[0]];
+    const text = (S.eventName ? S.eventName + ' — ' : '') + (S.mode === 'tournament' ? '🏆 Campeão: ' : '🏇 Vencedor: ') + (v ? v.nome : '') + (S.prize ? ' — ' + S.prize : '');
+    const d = (shareData && shareData.seed == seed) ? shareData : null;
+    if (navigator.share && d && d.url) {
+      navigator.share({ title: CFG.APPNAME, text, url: d.url })
+        .then(() => Log.info('Result','compartilhado (Web Share, link)'))
+        .catch(e => { if (e && e.name === 'AbortError') return; Log.warn('Result','Web Share falhou; caindo p/ copiar', e); copyLink(seed); });
+      return;
+    }
+    copyLink(seed); // sem suporte ou pré-computo ainda não pronto
+  }
+  // Preview do link: campo readonly (clica = seleciona tudo) + nº de caracteres.
+  function showLinkPreview(url){
+    const box = D.id('linkPreview'); if (!box) return;
+    D.setHTML('linkPreview', `<div class="lp-row"><input id="linkPreviewInp" class="lp-inp" readonly value="${U.esc(url)}"><button class="btn btn-sm" data-action="copiarLinkPreview">📋 Copiar</button></div><div class="hint">${url.length} caracteres${url.includes('#d=') ? ' · comprimido' : ''} — clique no campo para selecionar tudo</div>`);
+    box.style.display = 'block';
+    const inp = D.id('linkPreviewInp'); if (inp) D.on(inp, 'focus', () => { try { inp.select(); } catch (e) {} });
+  }
+  // Recopia o link a partir do preview (clipboard ou seleção como fallback).
+  function copyLinkPreview(){
+    const inp = D.id('linkPreviewInp'); if (!inp) return;
+    try { inp.select(); } catch (e) {}
+    try { navigator.clipboard.writeText(inp.value); App.Roster.msg('Link copiado!', true); }
+    catch (e) { try { document.execCommand('copy'); App.Roster.msg('Link copiado!', true); } catch (e2) { App.Roster.msg('Selecione e copie (Ctrl/Cmd+C)', true); } }
+  }
+  // QR Code do link, gerado 100% local (App.QR). Mostra num modal; se a lista
+  // for grande demais para caber no QR, avisa p/ usar o "Copiar link".
+  let lastQrUrl = '', lastFocus = null, shareData = { seed:null, url:null };
+  async function showQR(seed){
+    try {
+      const url = await buildShareUrl(seed); lastQrUrl = url;
+      App.QR.draw(url, D.id('qrCanvas'));
+      D.setText('qrSub', 'Aponte a câmera do celular para entrar no sorteio.');
+      lastFocus = document.activeElement;
+      const m = D.id('qrModal'); m.classList.add('open');
+      const fb = m.querySelector('button'); if (fb) fb.focus(); // foco entra no modal (teclado)
+      Log.info('Result','QR exibido', { len:url.length });
+    } catch (e) { App.Roster.msg('Lista grande demais para o QR — use o "🔗 Copiar link".', false); Log.warn('Result','QR não gerado', e); }
+  }
+  // Baixa o QR exibido como PNG (rasterizado do canvas) ou SVG (vetorial).
+  function downloadBlob(blob, name){ try { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 3000); } catch (e) { Log.warn('Result','download falhou', e); } }
+  function downloadQrPng(){ const cv = D.id('qrCanvas'); if (!cv || !cv.toBlob) return; cv.toBlob(b => { if (b) { downloadBlob(b, 'sorteio-qr.png'); App.Roster.msg('QR (PNG) baixado!', true); } else App.Roster.msg('Não foi possível gerar o PNG.', false); }); }
+  function downloadQrSvg(){ if (!lastQrUrl) return; try { downloadBlob(new Blob([App.QR.svg(lastQrUrl)], { type:'image/svg+xml' }), 'sorteio-qr.svg'); App.Roster.msg('QR (SVG) baixado!', true); } catch (e) { App.Roster.msg('Não foi possível gerar o SVG.', false); Log.warn('Result','SVG do QR falhou', e); } }
+  function closeQR(){ const m = D.id('qrModal'); if (m) m.classList.remove('open'); if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} lastFocus = null; } }
+  return { reveal, build, copySeed, copyLink, share, copyLinkPreview, showQR, closeQR, downloadQrPng, downloadQrSvg, toggleSave, closeSave };
+})();
+
+/* ===================== Export — PDF / certificado / imagem ===================== */
+/* jsPDF vem por CDN. Se indisponível, cai para imagem PNG (canvas). Cada
+   função é envolvida em try/catch com log do erro e fallback.               */
+App.Export = (function(){
+  const APPNAME = CFG.APPNAME;
+  function dataHoje(){ return new Date().toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' }); }
+  // PDF com vencedor + classificação completa.
+  function pdfRanking(){
+    if (!window.jspdf) { App.Roster.msg('PDF indisponível, gerando imagem...', true); pngImage(); return; }
+    try {
+      const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit:'mm', format:'a4' }); const W = 210; let y = 22; const v = S.cavalos[S.sim.order[0]];
+      doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(44,44,42); doc.text(S.eventName || APPNAME, W/2, y, {align:'center'}); y += 8;
+      doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(110,110,110); doc.text((S.mode==='tournament'?'Torneio — ':'')+'Sorteio em '+dataHoje(), W/2, y, {align:'center'}); y += 14;
+      doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(29,158,117); doc.text((S.mode==='tournament'?'Campeao: ':'Vencedor: ')+v.nome, 20, y); y += 8;
+      if (S.prize) { doc.setFontSize(11); doc.setTextColor(15,110,86); doc.text('Premio: '+S.prize, 20, y); y += 8; }
+      doc.setTextColor(44,44,42); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(S.mode==='tournament'?'Classificacao da final':'Classificacao completa', 20, y); y += 8;
+      doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(60,60,60);
+      S.sim.order.forEach((idx,p) => { if (y > 280) { doc.addPage(); y = 22; } doc.text(`${p+1}o   ${S.cavalos[idx].nome}`, 24, y); y += 6.5; });
+      if (y > 284) { doc.addPage(); y = 22; } doc.setTextColor(150,150,150); doc.setFontSize(9); doc.text('Semente: '+(S.mode==='tournament'?S.tourBaseSeed:S.sim.seed), 20, y+6);
+      doc.save('resultado-sorteio.pdf'); App.Roster.msg('PDF do resultado gerado!', true); Log.info('Export','PDF do resultado gerado');
+    } catch (e) { Log.error('Export','falha no PDF do resultado', e); App.Roster.msg('Não foi possível gerar o PDF, gerando imagem...', true); pngImage(); }
+  }
+  // Certificado de vitória (paisagem).
+  function certificate(){
+    if (!window.jspdf) { App.Roster.msg('PDF indisponível, gerando imagem...', true); pngImage(); return; }
+    try {
+      const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' }); const W = 297, H = 210; const v = S.cavalos[S.sim.order[0]];
+      doc.setDrawColor(186,117,23); doc.setLineWidth(2); doc.rect(12,12,W-24,H-24); doc.setLineWidth(.4); doc.rect(16,16,W-32,H-32);
+      doc.setTextColor(186,117,23); doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.text('CERTIFICADO DE VITORIA', W/2, 48, {align:'center'});
+      doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(13); doc.text('Concedido a', W/2, 78, {align:'center'});
+      doc.setTextColor(44,44,42); doc.setFont('helvetica','bold'); doc.setFontSize(36); doc.text(v.nome, W/2, 99, {align:'center'});
+      doc.setFont('helvetica','normal'); doc.setFontSize(13); doc.setTextColor(90,90,90); doc.text(S.mode==='tournament'?'por vencer o Torneio (Turfe)':'por vencer o '+APPNAME, W/2, 120, {align:'center'});
+      if (S.prize) { doc.setTextColor(15,110,86); doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text('Premio: '+S.prize, W/2, 135, {align:'center'}); }
+      doc.setTextColor(120,120,120); doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.text(dataHoje(), W/2, 168, {align:'center'});
+      doc.save('certificado-vitoria.pdf'); App.Roster.msg('Certificado em PDF gerado!', true); Log.info('Export','certificado gerado');
+    } catch (e) { Log.error('Export','falha no certificado', e); App.Roster.msg('Não foi possível gerar o PDF, gerando imagem...', true); pngImage(); }
+  }
+  // Imagem PNG do resultado (fallback universal, via canvas).
+  // Desenha um CARTÃO bonito do resultado (1080×1080, tema escuro como a tela): card do
+  // vencedor com medalha + sprite, pódio 2º/3º e equipe campeã. Usado no "Salvar imagem".
+  function resultCanvas(){
+    const W = 1080, H = 1080, cx = W/2;
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    const cs = getComputedStyle(document.body), cv = (n,fb) => (cs.getPropertyValue(n).trim() || fb), dark = document.body.classList.contains('dark');
+    const C = { bg:cv('--bg','#fff'), surface:cv('--surface','#f5f4ef'), border:cv('--border','#e3e1d8'), tp:cv('--tp','#2c2c2a'), ts:cv('--ts','#6b6a64'), tt:cv('--tt','#a3a299'), gold:cv('--gold','#C89117'), green:cv('--go','#1D9E75'), greenD:cv('--go-dark','#0F6E56') };
+    const v = S.cavalos[S.sim.order[0]], ord = S.sim.order, isTour = S.mode === 'tournament';
+    const rr = (xx,yy,ww,hh,r) => { x.beginPath(); x.moveTo(xx+r,yy); x.arcTo(xx+ww,yy,xx+ww,yy+hh,r); x.arcTo(xx+ww,yy+hh,xx,yy+hh,r); x.arcTo(xx,yy+hh,xx,yy,r); x.arcTo(xx,yy,xx+ww,yy,r); x.closePath(); };
+    const fit = (txt,yy,size,weight,color,maxW) => { let s=size; x.font=`${weight} ${s}px sans-serif`; while (x.measureText(txt).width>maxW && s>14){ s-=2; x.font=`${weight} ${s}px sans-serif`; } x.fillStyle=color; x.textAlign='center'; x.fillText(txt,cx,yy); };
+    // fundo + faixa dourada
+    x.fillStyle = C.bg; x.fillRect(0,0,W,H); x.fillStyle = C.gold; x.fillRect(0,0,W,12);
+    fit('🏇 ' + (S.eventName || APPNAME), 92, 46, 'bold', C.tp, W-120);
+    fit((isTour?'Torneio — ':'') + 'Sorteio em ' + dataHoje(), 134, 24, '', C.ts, W-160);
+    // card do vencedor
+    const aX=270, aY=176, aW=540, aH=476;
+    x.save(); x.shadowColor = dark ? 'rgba(0,0,0,.5)' : 'rgba(0,0,0,.16)'; x.shadowBlur=34; x.shadowOffsetY=12; x.fillStyle=C.surface; rr(aX,aY,aW,aH,30); x.fill(); x.restore();
+    x.lineWidth=4; x.strokeStyle=C.gold; rr(aX,aY,aW,aH,30); x.stroke();
+    x.textAlign='center';
+    x.font='62px sans-serif'; x.fillStyle=C.tp; x.fillText('🥇', cx, aY+92);
+    x.font='128px sans-serif'; x.fillText(v.emoji, cx, aY+232);
+    fit(v.nome, aY+318, 60, 'bold', C.tp, aW-70);
+    fit(isTour?'CAMPEÃO':'VENCEDOR', aY+360, 26, 'bold', C.green, aW-70);
+    let cy = aY+404;
+    if (S.mode==='teams' && v.team){ fit('🏵️ '+v.team, cy, 24, 'bold', C.ts, aW-80); cy+=40; }
+    if (S.prize){ fit('🎁 '+S.prize, cy, 24, '', C.greenD, aW-80); }
+    // pódio 2º/3º
+    const pY=688, pW=380, pH=250, gap=80, lX=(W-(pW*2+gap))/2;
+    const pod = (px, idx, medal) => {
+      x.fillStyle=C.surface; rr(px,pY,pW,pH,22); x.fill(); x.lineWidth=1.5; x.strokeStyle=C.border; rr(px,pY,pW,pH,22); x.stroke();
+      const pcx=px+pW/2; x.textAlign='center';
+      x.font='44px sans-serif'; x.fillStyle=C.tp; x.fillText(medal, pcx, pY+66);
+      x.font='74px sans-serif'; x.fillText(S.cavalos[idx].emoji, pcx, pY+150);
+      let s=30, nm=S.cavalos[idx].nome; x.font=`bold ${s}px sans-serif`; while(x.measureText(nm).width>pW-40 && s>14){ s-=2; x.font=`bold ${s}px sans-serif`; } x.fillStyle=C.tp; x.fillText(nm,pcx,pY+208);
+    };
+    if (ord.length>=2) pod(lX, ord[1], '🥈');
+    if (ord.length>=3) pod(lX+pW+gap, ord[2], '🥉');
+    // rodapé: equipe campeã (teams) + url/semente
+    let fy = 990;
+    if (S.mode==='teams'){
+      const N=S.cavalos.length, score={}; ord.forEach((idx,p)=>{ const t=S.cavalos[idx].team||'Sem equipe'; score[t]=(score[t]||0)+(N-p); });
+      const champ=Object.keys(score).sort((a,b)=>score[b]-score[a])[0];
+      if (champ){ fit('🏆 Equipe campeã: '+champ, fy, 26, 'bold', C.green, W-120); fy+=44; }
+    }
+    const seed = isTour ? S.tourBaseSeed : (S.seq ? S.seq.base : (S.sim ? S.sim.seed : ''));
+    fit('sorteio.felicio.com.br · ⚖️ semente ' + seed, fy, 20, '', C.tt, W-100);
+    return c;
+  }
+  // Imagem PNG do resultado (fallback universal, via canvas).
+  function pngImage(){
+    try {
+      resultCanvas().toBlob(b => { const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href=url; a.download='resultado-sorteio.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000); App.Roster.msg('Imagem gerada!', true); Log.info('Export','imagem PNG gerada'); });
+    } catch (e) { Log.error('Export','falha na imagem PNG', e); App.Roster.msg('Não foi possível gerar a imagem neste navegador.', false); }
+  }
+  return { pdfRanking, certificate, pngImage };
+})();
+
+/* ===================== UI — fiação (delegação + teclado + init) ===================== */
+/* Em vez de onclick inline, os botões têm data-action (+ data-arg/data-idx).
+   ACTIONS mapeia o nome da ação -> o que fazer. Para um botão novo: adicione
+   data-action no HTML e uma entrada aqui. Um só listener cuida de tudo.      */
+App.UI = (function(){
+  // Pequenos helpers locais usados por algumas ações.
+  function togglePanel(id){ const e = D.id(id); if (e) e.classList.toggle('open'); }
+
+  // Tabela ação -> handler. (el = elemento clicado; e = evento)
+  const ACTIONS = {
+    // som
+    toggleSoundMenu: (el, e) => App.Audio.toggleMenu(e),
+    toggleSfx:       () => App.Audio.toggleSfx(),
+    toggleVoice:     () => App.Audio.toggleVoice(),
+    // visual (tema / tela cheia)
+    toggleTheme:      () => App.View.toggleTheme(),
+    toggleFullscreen: () => App.View.toggleFullscreen(),
+    // cadastro / modos
+    setMode:    (el) => App.Modes.set(el.dataset.mode),
+    addOne:     () => App.Roster.addOne(),
+    addBulk:    () => App.Roster.addBulk(),
+    exemplos:   () => App.Roster.exemplos(),
+    limparTudo: () => App.Roster.clear(),
+    togglePanel:(el) => togglePanel(el.dataset.arg),
+    togglePrizes: () => { const e = D.id('prizesExtra'); if (!e) return; const open = e.style.display !== 'none'; e.style.display = open ? 'none' : 'block'; const b = D.id('prizesToggle'); if (b) b.textContent = open ? '➕ Prêmios para 2º e 3º lugar' : '➖ Esconder 2º e 3º lugar'; },
+    setPrizeMode: (el) => { S.prizeMode = (el.value === 'sequential') ? 'sequential' : 'podium'; App.Store.save(); },
+    abrirHist:  () => App.History.open(),
+    fecharHist: () => App.History.close(),
+    abrirListas:   () => App.Lists.open(),
+    fecharListas:  () => App.Lists.close(),
+    salvarLista:   () => App.Lists.saveCurrent(),
+    carregarLista: (el) => App.Lists.load(+el.dataset.idx),
+    removerLista:  (el) => App.Lists.remove(+el.dataset.idx),
+    exportarListas:() => App.Lists.exportFile(),
+    importarListas:() => { const f = D.id('listsFile'); if (f) f.click(); },
+    limparGanhadores:() => App.Race.clearWinners(),
+    reabrirHist:(el) => App.History.reopen(+el.dataset.idx),
+    removerHist:(el) => App.History.remove(+el.dataset.idx),
+    limparHist: () => App.History.clear(),
+    removerP:   (el) => App.Roster.remove(+el.dataset.idx),
+    editarNome: (el) => App.Roster.startEdit(+el.dataset.idx),
+    trocarEquipe:(el) => App.Roster.cycleTeam(+el.dataset.idx),
+    criarEquipe:() => App.Teams.create(),
+    removerEquipe:(el) => App.Teams.remove(+el.dataset.idx),
+    editarEquipe:(el) => App.Teams.startEdit(+el.dataset.idx),
+    // corrida / torneio
+    iniciar:          () => App.Race.iniciar(),
+    pular:            () => App.Race.skip(),
+    novamente:        () => App.Race.novamente(),
+    proximo:          () => App.Race.proximo(),
+    reprisar:         () => App.Race.reprisar(),
+    editar:           () => App.Race.editar(),
+    continuarTorneio: () => App.Tournament.continuar(),
+    // resultado / exportações
+    copiarSemente:   (el) => App.Result.copySeed(el.dataset.arg),
+    copiarLink:      (el) => App.Result.copyLink(el.dataset.arg),
+    compartilhar:    (el) => App.Result.share(el.dataset.arg),
+    copiarLinkPreview: () => App.Result.copyLinkPreview(),
+    mostrarQR:       (el) => App.Result.showQR(el.dataset.arg),
+    fecharQR:        () => App.Result.closeQR(),
+    baixarQrPng:     () => App.Result.downloadQrPng(),
+    baixarQrSvg:     () => App.Result.downloadQrSvg(),
+    toggleSalvar:    (el, e) => App.Result.toggleSave(e),
+    imprimirRanking: () => { App.Export.pdfRanking(); App.Result.closeSave(); },
+    certificado:     () => { App.Export.certificate(); App.Result.closeSave(); },
+    salvarImagem:    () => { App.Export.pngImage(); App.Result.closeSave(); }
+  };
+
+  // Listener único de clique: (1) som nos .btn, (2) fecha menus ao clicar fora,
+  // (3) despacha a ação do data-action mais próximo.
+  function onClick(e){
+    if (e.target.closest('.btn')) App.Audio.click();
+    if (!e.target.closest('#saveWrap')) App.Result.closeSave();
+    if (!e.target.closest('#soundWrap')) App.Audio.closeMenu();
+    if (e.target.id === 'qrModal') App.Result.closeQR();
+    if (e.target.id === 'histModal') App.History.close();
+    if (e.target.id === 'listsModal') App.Lists.close();
+    const el = e.target.closest('[data-action]'); if (!el) return;
+    const name = el.dataset.action, fn = ACTIONS[name];
+    if (!fn) { Log.warn('UI','ação sem handler', { action:name }); return; }
+    Log.debug('UI','ação', { action:name, idx:el.dataset.idx, arg:el.dataset.arg });
+    try { fn(el, e); } catch (err) { Log.error('UI','erro ao executar ação ' + name, err); }
+  }
+
+  // Pré-preenche o sorteio a partir da URL (?modo=&seed=&n=&t=). NÃO inicia —
+  // o apresentador confere e clica em Iniciar. Reusa Modes/Roster/Teams.
+  async function applyUrlParams(){
+    let loaded = false;
+    try {
+      // Fonte da query: fragmento comprimido (#d=…), fragmento cru (#…) ou ?query (compat).
+      const h = location.hash.slice(1);
+      let q;
+      if (h.startsWith('d=')) {
+        if (!U.supportsCompression()) { App.Roster.msg('Este link precisa de um navegador atualizado.', false); return; }
+        q = await U.inflateB64url(h.slice(2));
+      } else if (/[=&]/.test(h)) { q = h; }
+      else { q = location.search.slice(1); }
+      const p = new URLSearchParams(q || '');
+      const modo = p.get('modo');
+      if (modo && CFG.MODE_HINTS[modo]) { App.Modes.set(modo); loaded = true; }
+      const names = p.getAll('n'), teams = p.getAll('t');
+      if (names.length) {
+        if (S.mode === 'teams') {
+          names.forEach((nome, i) => {
+            const team = (teams[i] || '').trim();
+            if (team && !S.teams.some(t => t.toLowerCase() === team.toLowerCase())) { S.teams.push(team); App.Teams.color(team); }
+            App.Roster.addNames([nome], team || null);
+          });
+          App.Teams.renderChips(); App.Teams.buildSelect();
+        } else {
+          App.Roster.addNames(names, null);
+        }
+        loaded = true;
+      }
+      const seed = (p.get('seed') || p.get('semente') || '').trim();
+      if (/^\d+$/.test(seed)) { D.id('seedInp').value = seed.slice(0,12); const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
+      const ev = (p.get('ev') || '').trim().slice(0,60);
+      if (ev) { const ei = D.id('eventInp'); if (ei) ei.value = ev; S.eventName = ev; const a = D.id('advOpts'); if (a) a.open = true; loaded = true; }
+      const prizes = p.getAll('p').map(s => s.trim()).filter(Boolean);
+      if (prizes.length) {
+        ['prizeInp','prizeInp2','prizeInp3'].forEach((id, i) => { const el = D.id(id); if (el && prizes[i]) el.value = prizes[i].slice(0, 60); });
+        if (prizes.length > 1) { const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block'; }
+        const a = D.id('advOpts'); if (a) a.open = true; // prêmios agora vivem em "Opções"
+        loaded = true;
+      }
+      // pm=seq: o link reproduz uma sequência de prêmios — marca o modo "uma corrida por prêmio".
+      if (p.get('pm') === 'seq' && prizes.length > 1) {
+        S.prizeMode = 'sequential';
+        try { const r = document.querySelector('input[name="prizeMode"][value="sequential"]'); if (r) r.checked = true; } catch (e) {}
+        const ex = D.id('prizesExtra'); if (ex) ex.style.display = 'block';
+      }
+      if (loaded) { App.Roster.msg('Sorteio carregado do link — confira e clique em Iniciar ✓', true); Log.info('UI','sorteio carregado da URL', { modo:S.mode, participantes:S.participantes.length, seed }); }
+    } catch (e) { Log.warn('UI','falha ao ler parâmetros da URL', e); }
+    finally {
+      // Sem sorteio na URL? restaura o rascunho salvo localmente (a URL tem prioridade).
+      try { if (!loaded) App.Store.restore(); } catch (e) { Log.warn('UI','restauração local falhou', e); }
+      App.Store.arm(); // a partir daqui, mudanças no cadastro são salvas automaticamente
+    }
+  }
+
+  function init(){
+    // Enter nos campos de texto
+    D.on(D.id('inp'), 'keydown', e => { if (e.key === 'Enter') App.Roster.addOne(); });
+    D.on(D.id('newTeam'), 'keydown', e => { if (e.key === 'Enter') App.Teams.create(); });
+    // Persistência: salva o cadastro ao digitar prêmio/semente
+    D.on(D.id('prizeInp'), 'input', () => App.Store.save());
+    D.on(D.id('prizeInp2'), 'input', () => App.Store.save());
+    D.on(D.id('prizeInp3'), 'input', () => App.Store.save());
+    D.on(D.id('seedInp'), 'input', () => App.Store.save());
+    // Delegação global de cliques
+    D.on(document, 'click', onClick);
+    // Reordenar arrastando pelo "punho" (⠿), delegado no #lista — Pointer Events
+    // p/ funcionar também no toque (drag-and-drop nativo não dispara no mobile).
+    const lista = D.id('lista'); let dragSrc = null, dragOver = null;
+    const clearMarks = () => { if (lista) lista.querySelectorAll('.dragging,.dragover').forEach(c => c.classList.remove('dragging','dragover')); };
+    D.on(lista, 'pointerdown', e => {
+      const g = e.target.closest && e.target.closest('.grip'); if (!g) return;
+      const c = g.closest('.chip'); if (!c || c.dataset.idx == null) return;
+      e.preventDefault(); dragSrc = +c.dataset.idx; dragOver = dragSrc; c.classList.add('dragging');
+      try { g.setPointerCapture(e.pointerId); } catch (_) {}
+      try { g.focus(); } catch (_) {} // mantém o foco no punho (teclado) apesar do preventDefault
+    });
+    D.on(lista, 'pointermove', e => {
+      if (dragSrc == null) return; e.preventDefault();
+      const t = document.elementFromPoint(e.clientX, e.clientY); const c = (t && t.closest) ? t.closest('.chip') : null;
+      const idx = (c && c.dataset.idx != null) ? +c.dataset.idx : null;
+      if (idx === dragOver) return;
+      lista.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover'));
+      if (c && idx !== dragSrc) c.classList.add('dragover');
+      dragOver = idx;
+    });
+    const endDrag = e => { if (dragSrc == null) return; if (e) e.preventDefault(); const from = dragSrc, to = dragOver; dragSrc = dragOver = null; if (to != null && to !== from) App.Roster.reorder(from, to); else clearMarks(); };
+    D.on(lista, 'pointerup', endDrag);
+    D.on(lista, 'pointercancel', () => { dragSrc = dragOver = null; clearMarks(); });
+    // Teclado (acessível): reordenar pelo punho (↑/↓/Home/End) e editar pelo nome (Enter/Espaço)
+    D.on(lista, 'keydown', e => {
+      const t = e.target; if (!t || !t.classList) return;
+      if (t.classList.contains('grip')) {
+        const c = t.closest('.chip'); if (!c || c.dataset.idx == null) return;
+        const i = +c.dataset.idx, last = App.State.participantes.length - 1; let to = null;
+        if (e.key === 'ArrowUp') to = i - 1; else if (e.key === 'ArrowDown') to = i + 1;
+        else if (e.key === 'Home') to = 0; else if (e.key === 'End') to = last; else return;
+        e.preventDefault(); if (to < 0 || to > last || to === i) return;
+        App.Roster.reorder(i, to);
+        const g = lista.querySelector(`.chip[data-idx="${to}"] .grip`); if (g) g.focus();
+      } else if (t.classList.contains('n') && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault(); App.Roster.startEdit(+t.dataset.idx);
+      } else if (t.classList.contains('teamtag') && t.dataset.action === 'trocarEquipe' && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault(); App.Roster.cycleTeam(+t.dataset.idx);
+      }
+    });
+    // Equipes: renomear pelo teclado (Enter/Espaço no nome do chip da equipe)
+    const tchips = D.id('teamChips'); if (tchips) D.on(tchips, 'keydown', e => { const t = e.target; if (t && t.classList && t.classList.contains('n') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); App.Teams.startEdit(+t.dataset.idx); } });
+    // Teclado global: Esc fecha o modal do QR e os menus abertos
+    // Marca rolagem manual (pausa o auto-scroll da corrida pra não brigar com o usuário)
+    const markScroll = () => { S.userScrollAt = performance.now(); };
+    D.on(window, 'wheel', markScroll, { passive:true }); D.on(window, 'touchmove', markScroll, { passive:true });
+    const ln = D.id('listName'); if (ln) D.on(ln, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); App.Lists.saveCurrent(); } });
+    const lf = D.id('listsFile'); if (lf) D.on(lf, 'change', e => { const f = e.target.files && e.target.files[0]; App.Lists.importFile(f); e.target.value = ''; });
+    D.on(document, 'keydown', e => { if (e.key === 'Escape') { App.Result.closeQR(); App.History.close(); App.Lists.close(); App.Result.closeSave(); App.Audio.closeMenu(); } });
+    // Preferências de UI: tema + tela cheia; volume (slider) + restaura mudo/voz/volume salvos
+    App.View.init();
+    D.on(D.id('volSlider'), 'input', e => App.Audio.setVolume(e.target.value / 100));
+    App.Audio.loadPrefs();
+    // Vozes da narração (carregamento assíncrono em alguns navegadores)
+    if ('speechSynthesis' in window) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => { speechSynthesis.getVoices(); App.Audio.populateVoices(); }; } catch (e) {} }
+    const vsel = D.id('voiceSel'); if (vsel) D.on(vsel, 'change', e => App.Audio.setVoice(e.target.value));
+    const nrc = D.id('noRepeatChk'); if (nrc) D.on(nrc, 'change', () => App.Race.setNoRepeat(nrc.checked));
+    App.Race.initNoRepeat();
+    // Render inicial
+    App.Roster.render(); App.Teams.renderChips(); App.History.render();
+    // Pré-preenche o sorteio se a URL trouxer parâmetros (link compartilhável; assíncrono p/ descomprimir)
+    applyUrlParams().catch(e => Log.warn('UI','applyUrlParams falhou', e));
+    Log.info('UI','interface pronta');
+  }
+  return { init, ACTIONS };
+})();
+
+/* ===================== BOOT ===================== */
+(function boot(){
+  // Captura erros globais para o console (com origem) — facilita diagnóstico.
+  window.addEventListener('error', e => Log.error('window', 'erro não tratado', { message:e.message, src:e.filename, linha:e.lineno, col:e.colno, error:e.error }));
+  window.addEventListener('unhandledrejection', e => Log.error('window', 'promise rejeitada sem catch', { reason:e.reason }));
+  const modulos = Object.keys(App).filter(k => k !== 'Config' && k !== 'State');
+  Log.info('App', `🏇 ${CFG.APPNAME} — inicializando`, { modulos });
+  try { App.UI.init(); Log.info('App', 'pronto ✓'); }
+  catch (e) { Log.error('App', 'falha na inicialização', e); }
+})();
+</script>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="srLive" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+</body>
+</html>
